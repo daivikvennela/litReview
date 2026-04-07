@@ -6,6 +6,7 @@ const router = Router();
 const SETTING_KEYS = [
   "openrouter_api_key",
   "grobid_url",
+  "grobid_mode",
   "default_model",
   "default_model_task1",
   "default_model_task2",

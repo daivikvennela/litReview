@@ -18,7 +18,6 @@ import {
 import { parsePdfToXml } from "../lib/grobid.js";
 import { buildArticleRecordFromTei } from "../lib/teiMetadata.js";
 import { pickIntroSummaryLit } from "../lib/reviewPick.js";
-import { debugLog } from "../lib/debugLog.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 const router = Router();
@@ -216,17 +215,6 @@ router.delete("/:id", (req: Request, res: Response) => {
 
 router.post("/batch", upload.array("pdfs", 50), async (req: Request, res: Response) => {
   const files = (req.files as Express.Multer.File[]) || [];
-  // #region agent log
-  debugLog({
-    sessionId: "c1ca1d",
-    runId: "upload-batch",
-    hypothesisId: "U0",
-    location: "articles.ts:POST /batch:entry",
-    message: "Entered /api/articles/batch",
-    data: { fileCount: files.length, names: files.slice(0, 5).map((f) => f.originalname) },
-    timestamp: Date.now(),
-  });
-  // #endregion
   if (files.length === 0) {
     res.status(400).json({ error: "No PDF files uploaded" });
     return;
@@ -253,17 +241,6 @@ router.post("/batch", upload.array("pdfs", 50), async (req: Request, res: Respon
         // Even if we already have TEI cached for this content hash, update the displayed filename
         // and timestamp so Library reflects the most recent upload.
         upsertArticle({ id, pdf_path: file.originalname, parsed_at: new Date().toISOString() });
-        // #region agent log
-        debugLog({
-          sessionId: "c1ca1d",
-          runId: "upload-batch",
-          hypothesisId: "U1",
-          location: "articles.ts:POST /batch:cached",
-          message: "Batch upload hit cached article (existing xml)",
-          data: { id, pdf_path: file.originalname },
-          timestamp: Date.now(),
-        });
-        // #endregion
         send("progress", {
           current: i + 1,
           total: files.length,
@@ -279,32 +256,9 @@ router.post("/batch", upload.array("pdfs", 50), async (req: Request, res: Respon
       upsertArticle(
         buildArticleRecordFromTei(xml, { id, pdf_path: file.originalname, parsed_at: parsedAt }),
       );
-      // #region agent log
-      debugLog({
-        sessionId: "c1ca1d",
-        runId: "upload-batch",
-        hypothesisId: "U2",
-        location: "articles.ts:POST /batch:success",
-        message: "Batch upload parsed and upserted article",
-        data: { id, pdf_path: file.originalname, parsed_at: parsedAt },
-        timestamp: Date.now(),
-      });
-      // #endregion
       send("progress", { current: i + 1, total: files.length, filename: file.originalname, status: "done" });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Parse failed";
-
-      // #region agent log
-      debugLog({
-        sessionId: "c1ca1d",
-        runId: "upload-batch",
-        hypothesisId: "U3",
-        location: "articles.ts:POST /batch:catch",
-        message: "Error in batch parse loop",
-        data: { filename: file.originalname, error: message },
-        timestamp: Date.now(),
-      });
-      // #endregion
 
       send("progress", {
         current: i + 1,

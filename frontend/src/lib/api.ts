@@ -39,6 +39,7 @@ export interface Review {
 export interface Settings {
   openrouter_api_key?: string
   grobid_url?: string
+  grobid_mode?: 'docker' | 'external'
   default_model?: string
   default_model_task1?: string
   default_model_task2?: string
@@ -290,10 +291,10 @@ export const getModels = () =>
 
 // ----- GROBID -----
 export const getGrobidStatus = () =>
-  api.get<{ alive: boolean }>('/grobid/status').then((r) => r.data)
+  api.get<{ alive: boolean; mode?: 'docker' | 'external' }>('/grobid/status').then((r) => r.data)
 
 export const startGrobid = () =>
-  api.post('/grobid/start').then((r) => r.data)
+  api.post<{ ok: boolean; alive?: boolean; mode?: string; message?: string; error?: string }>('/grobid/start').then((r) => r.data)
 
 // ----- Legacy stubs (for unused hooks/pages) -----
 export const getPapers = (params?: Record<string, unknown>) =>

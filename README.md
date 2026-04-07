@@ -36,6 +36,8 @@ The installer will:
 - optionally prompt for `OPENROUTER_API_KEY` and `GROBID_URL`
 - build the frontend into `app/public`
 
+For easiest onboarding, keep `GROBID_URL` as `http://localhost:8070` and use **Settings -> GROBID -> Docker managed -> Start with Docker** after first launch.
+
 ## Configure environment
 
 Edit `.env`:
@@ -72,8 +74,9 @@ npm start          # run express app
 
 ## Notes for end users
 
-- GROBID is not bundled in this repository.
-- Configure GROBID URL in Settings in the app.
+- GROBID mode is configurable in Settings:
+  - `Docker managed`: app can start/reuse a local `grobid` container.
+  - `External URL`: app connects to your own GROBID server URL.
 - Export metadata is tracked in DB settings (last export timestamp/count/scope).
 
 ## License

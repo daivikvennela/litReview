@@ -6,69 +6,77 @@ import { getSetting } from "../db.js";
 
 const execAsync = promisify(exec);
 const router = Router();
+const GROBID_IMAGE = "lfoppiano/grobid:0.8.1";
+const GROBID_CONTAINER = "grobid";
+
+async function waitForAlive(url: string, timeoutMs = 15000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    // eslint-disable-next-line no-await-in-loop
+    const alive = await checkGrobidAlive(url);
+    if (alive) return true;
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  return false;
+}
+
+async function dockerContainerExists(name: string): Promise<boolean> {
+  const { stdout } = await execAsync(`docker ps -a --filter "name=^/${name}$" --format "{{.Names}}"`);
+  return stdout.trim() === name;
+}
+
+async function dockerContainerRunning(name: string): Promise<boolean> {
+  const { stdout } = await execAsync(`docker ps --filter "name=^/${name}$" --format "{{.Names}}"`);
+  return stdout.trim() === name;
+}
 
 router.get("/status", async (req: Request, res: Response) => {
   const grobidUrl = getSetting("grobid_url");
+  const mode = getSetting("grobid_mode") || "docker";
   const alive = await checkGrobidAlive(grobidUrl);
-  res.json({ alive });
+  res.json({ alive, mode });
 });
 
 router.post("/start", async (req: Request, res: Response) => {
+  const mode = getSetting("grobid_mode") || "docker";
+  const url = getGrobidUrl(getSetting("grobid_url"));
+
+  if (mode !== "docker") {
+    const alive = await checkGrobidAlive(getSetting("grobid_url"));
+    res.json({
+      ok: alive,
+      mode,
+      alive,
+      message: alive
+        ? `External GROBID reachable at ${url}.`
+        : `External mode enabled. Set a reachable GROBID URL (current: ${url}).`,
+    });
+    return;
+  }
+
   try {
-    // #region agent log
-    fetch("http://127.0.0.1:7545/ingest/1a02892b-d039-4b48-a9ae-2d66a0b62737", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c1ca1d" },
-      body: JSON.stringify({
-        sessionId: "c1ca1d",
-        runId: "grobid-docker",
-        hypothesisId: "H1",
-        location: "grobid.ts:POST /start:beforeExec",
-        message: "Attempting to start GROBID Docker container",
-        data: { command: "docker run -d --name grobid -p 8070:8070 lfoppiano/grobid:0.8.1" },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
+    const alreadyRunning = await dockerContainerRunning(GROBID_CONTAINER);
+    if (!alreadyRunning) {
+      const exists = await dockerContainerExists(GROBID_CONTAINER);
+      if (exists) {
+        await execAsync(`docker start ${GROBID_CONTAINER}`);
+      } else {
+        await execAsync(`docker run -d --name ${GROBID_CONTAINER} -p 8070:8070 ${GROBID_IMAGE}`);
+      }
+    }
 
-    const { stdout, stderr } = await execAsync("docker run -d --name grobid -p 8070:8070 lfoppiano/grobid:0.8.1");
-
-    // #region agent log
-    fetch("http://127.0.0.1:7545/ingest/1a02892b-d039-4b48-a9ae-2d66a0b62737", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c1ca1d" },
-      body: JSON.stringify({
-        sessionId: "c1ca1d",
-        runId: "grobid-docker",
-        hypothesisId: "H2",
-        location: "grobid.ts:POST /start:afterExec",
-        message: "Docker run completed",
-        data: { stdout: stdout?.slice(0, 200), stderr: stderr?.slice(0, 200) },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-
-    res.json({ ok: true, message: "GROBID container started", stdout, stderr });
+    const alive = await waitForAlive(url, 20000);
+    res.json({
+      ok: alive,
+      mode: "docker",
+      alive,
+      message: alive
+        ? `GROBID is ready at ${url}.`
+        : `Docker container started but ${url}/api/isalive is not reachable yet.`,
+    });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to start GROBID";
-
-    // #region agent log
-    fetch("http://127.0.0.1:7545/ingest/1a02892b-d039-4b48-a9ae-2d66a0b62737", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c1ca1d" },
-      body: JSON.stringify({
-        sessionId: "c1ca1d",
-        runId: "grobid-docker",
-        hypothesisId: "H3",
-        location: "grobid.ts:POST /start:catch",
-        message: "Docker start failed",
-        data: { error: msg },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-
     res.status(500).json({ error: msg });
   }
 });

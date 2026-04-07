@@ -14,7 +14,7 @@ export default function Settings() {
 
   useEffect(() => {
     getSettings().then((s) => {
-      setSettings(s)
+      setSettings({ ...s, grobid_mode: s.grobid_mode ?? 'docker' })
       if (s.openrouter_api_key && !s.openrouter_api_key.endsWith('****')) {
         setApiKeyValue(s.openrouter_api_key)
       }
@@ -26,7 +26,10 @@ export default function Settings() {
   }, [])
 
   useEffect(() => {
-    getGrobidStatus().then((r) => setGrobidAlive(r.alive))
+    getGrobidStatus().then((r) => {
+      setGrobidAlive(r.alive)
+      if (r.mode) setSettings((s) => ({ ...s, grobid_mode: r.mode }))
+    })
     const t = setInterval(() => getGrobidStatus().then((r) => setGrobidAlive(r.alive)), 15000)
     return () => clearInterval(t)
   }, [])
@@ -42,28 +45,14 @@ export default function Settings() {
 
   const handleStartGrobid = () => {
     setGrobidStartMessage(null)
-    // #region agent log
-    fetch('http://127.0.0.1:7545/ingest/1a02892b-d039-4b48-a9ae-2d66a0b62737', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'c1ca1d' },
-      body: JSON.stringify({
-        sessionId: 'c1ca1d',
-        runId: 'grobid-docker',
-        hypothesisId: 'H4',
-        location: 'Settings.tsx:handleStartGrobid:click',
-        message: 'Start with Docker button clicked',
-        data: {},
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {})
-    // #endregion
-
     startGrobid()
-      .then(() =>
+      .then((resp) =>
         getGrobidStatus()
           .then((r) => {
             setGrobidAlive(r.alive)
-            setGrobidStartMessage(r.alive ? 'GROBID started successfully.' : 'Docker command ran, but GROBID is still offline.')
+            setGrobidStartMessage(
+              resp?.message || (r.alive ? 'GROBID is ready.' : 'GROBID is still offline.'),
+            )
           })
           .catch(() => {}),
       )
@@ -117,6 +106,24 @@ export default function Settings() {
           <h2 className="flex items-center gap-2 text-[15px] font-semibold text-slate-800 dark:text-slate-100 mb-4">
             <Server className="w-4 h-4" /> GROBID
           </h2>
+          <div className="mb-3">
+            <div className="inline-flex rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setSettings((s) => ({ ...s, grobid_mode: 'docker' }))}
+                className={`px-3 py-1.5 text-[12px] ${settings.grobid_mode === 'docker' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300'}`}
+              >
+                Docker managed
+              </button>
+              <button
+                type="button"
+                onClick={() => setSettings((s) => ({ ...s, grobid_mode: 'external' }))}
+                className={`px-3 py-1.5 text-[12px] border-l border-slate-200 dark:border-slate-700 ${settings.grobid_mode === 'external' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300'}`}
+              >
+                External URL
+              </button>
+            </div>
+          </div>
           <div className="flex items-center gap-3 flex-wrap">
             <input
               type="text"
@@ -136,6 +143,7 @@ export default function Settings() {
             <button
               type="button"
               onClick={handleStartGrobid}
+              disabled={settings.grobid_mode !== 'docker'}
               className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-[12px] font-medium text-slate-700 dark:text-slate-200"
             >
               <Play className="w-3.5 h-3.5" /> Start with Docker
