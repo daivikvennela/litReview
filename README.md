@@ -7,8 +7,8 @@ Local-first literature review assistant for PDF ingestion, TEI parsing, article 
 ### 1) Clone and install
 
 ```bash
-git clone git@github.com:preethamam/Papers-Articles-Introduction-Assimilator-Synthesizer.git
-cd "Papers-Articles-Introduction-Assimilator-Synthesizer"
+git clone git@github.com:preethamam/Papers-Articles-Literature-Review-Agent.git
+cd "Papers-Articles-Literature-Review-Agent"
 bash install.sh
 ```
 
