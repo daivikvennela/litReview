@@ -9,6 +9,7 @@ import {
   getSummarizeSetChatSystem,
 } from "../lib/prompts.js";
 import { validateCiteTargets } from "../lib/chatCiteGuard.js";
+import { RELATED_WORK_RETRY_USER_MESSAGE, relatedWorkPassesRigor } from "../lib/relatedWorkQualityGate.js";
 
 const router = Router();
 
@@ -59,7 +60,10 @@ router.post("/", async (req: Request, res: Response) => {
   }
   contentParts.push({ type: "text", text: message });
 
-  const docBlock = buildArticleContextSystemBlock(articleIds);
+  const docBlock = buildArticleContextSystemBlock(
+    articleIds,
+    mode === "related_work_compile" ? { mode: "related_work_compile" } : undefined,
+  );
   const systemParts: string[] = [];
   if (mode === "lit_review_synthesis") {
     systemParts.push(getLiteratureSynthesisSystem(detailLevel));
@@ -83,6 +87,7 @@ router.post("/", async (req: Request, res: Response) => {
   res.setHeader("Connection", "keep-alive");
 
   const allowedCiteIds = new Set(articleIds);
+  const bufferRelatedWorkFirstPass = mode === "related_work_compile" && articleIds.length >= 2;
 
   try {
     const openrouter = createOpenRouter(apiKey);
@@ -99,16 +104,56 @@ router.post("/", async (req: Request, res: Response) => {
       const content = chunk.choices?.[0]?.delta?.content;
       if (content) {
         fullText += content;
-        res.write(`data: ${JSON.stringify({ content })}\n\n`);
+        if (!bufferRelatedWorkFirstPass) {
+          res.write(`data: ${JSON.stringify({ content })}\n\n`);
+        }
       }
       if (chunk.usage) res.write(`data: ${JSON.stringify({ usage: chunk.usage })}\n\n`);
+    }
+
+    if (bufferRelatedWorkFirstPass) {
+      if (relatedWorkPassesRigor(fullText, articleIds.length)) {
+        res.write(`data: ${JSON.stringify({ content: fullText })}\n\n`);
+      } else {
+        res.write(
+          `data: ${JSON.stringify({
+            content:
+              "\n\n---\n\n**Regenerating** (first draft below rigor checks: length, structure, or citations). One stricter pass…\n\n",
+          })}\n\n`,
+        );
+        const retryMessages: Array<{ role: string; content: string | typeof contentParts }> = [
+          ...messages,
+          { role: "assistant", content: fullText },
+          { role: "user", content: RELATED_WORK_RETRY_USER_MESSAGE },
+        ];
+        const stream2 = await openrouter.chat.send({
+          chatGenerationParams: {
+            model: selectedModel,
+            messages: retryMessages as unknown as never[],
+            stream: true,
+          },
+        });
+        fullText = "";
+        for await (const chunk of stream2) {
+          const content = chunk.choices?.[0]?.delta?.content;
+          if (content) {
+            fullText += content;
+            res.write(`data: ${JSON.stringify({ content })}\n\n`);
+          }
+          if (chunk.usage) res.write(`data: ${JSON.stringify({ usage: chunk.usage })}\n\n`);
+        }
+      }
     }
 
     if (articleIds.length > 0 && fullText) {
       const citeCheck = validateCiteTargets(fullText, allowedCiteIds);
       if (!citeCheck.ok) {
-        const note = `\n\n[Citation check] Unknown cite target(s): ${citeCheck.invalid.join(", ")}. Use only Internal IDs from the context.`;
-        res.write(`data: ${JSON.stringify({ content: note })}\n\n`);
+        const base = `\n\n[Citation check] Unknown cite target(s): ${citeCheck.invalid.join(", ")}. Use only Internal IDs from the document blocks (copy the exact ID after "Internal ID:").`;
+        const extra =
+          mode === "related_work_compile"
+            ? " For Related Works, every paper-specific claim should use `[n](cite:INTERNAL_ID)` with a valid ID from the context."
+            : "";
+        res.write(`data: ${JSON.stringify({ content: base + extra })}\n\n`);
       }
     }
 

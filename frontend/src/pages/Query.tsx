@@ -22,7 +22,13 @@ const LIT_REVIEW_PROMPT = `Write a literature review synthesis that integrates t
 const SUMMARIZE_USER_PROMPT = `Summarize the selected papers using the structure defined in your instructions (cross-paper bullets, then a short paragraph per paper).`
 
 const INTRO_ABSTRACT_USER_PROMPT = `Draft the Introduction and Abstract sections in Markdown as specified in your instructions.`
-const RELATED_WORK_COMPILE_PROMPT = `Compile a Related Works section from the selected papers. Synthesize major prior approaches, contrasts, and gaps into one coherent output with citations.`
+
+const RELATED_WORK_COMPILE_PROMPT = `Write a publication-ready **Related Works** section for a research paper: thematic synthesis across the selected sources, explicit cross-paper comparison (methods, assumptions, datasets/metrics, and where findings agree or conflict), honest uncertainty when excerpts are thin, and dense inline citations in the required Markdown form. Avoid a disconnected list of per-paper abstracts unless the evidence base is extremely small.`
+
+/** Related-work compile always uses at least detail 2 so prompts match research-grade defaults (other modes unchanged). */
+function effectiveDetailForRelatedWork(level: 0 | 1 | 2 | 3): 0 | 1 | 2 | 3 {
+  return Math.max(level, 2) as 0 | 1 | 2 | 3
+}
 
 /** Dedupes React Strict Mode double-effect when opening /query?...&gen= */
 const autoGenConsumed = new Set<string>()
@@ -201,7 +207,11 @@ export default function Query() {
     } else if (gen === 'litreview') {
       sendRef.current(LIT_REVIEW_PROMPT, { articleIds, mode: 'lit_review_synthesis', detailLevel })
     } else if (gen === 'relatedwork') {
-      sendRef.current(RELATED_WORK_COMPILE_PROMPT, { articleIds, mode: 'related_work_compile', detailLevel })
+      sendRef.current(RELATED_WORK_COMPILE_PROMPT, {
+        articleIds,
+        mode: 'related_work_compile',
+        detailLevel: effectiveDetailForRelatedWork(detailLevel),
+      })
     }
   }, [articleIds, articleIdsKey, detailLevel, isStreaming, searchParams, setSearchParams])
 
@@ -228,7 +238,11 @@ export default function Query() {
 
   const runRelatedWorkCompile = () => {
     if (articleIds.length < 2 || articleIds.length > 50 || isStreaming) return
-    sendMessage(RELATED_WORK_COMPILE_PROMPT, { articleIds, mode: 'related_work_compile', detailLevel })
+    sendMessage(RELATED_WORK_COMPILE_PROMPT, {
+      articleIds,
+      mode: 'related_work_compile',
+      detailLevel: effectiveDetailForRelatedWork(detailLevel),
+    })
   }
 
   const clearScope = () => {
@@ -293,6 +307,7 @@ export default function Query() {
                   type="button"
                   onClick={runRelatedWorkCompile}
                   disabled={isStreaming || articleIds.length < 2 || articleIds.length > 50}
+                  title="Uses minimum detail level 2 (standard) for research-grade synthesis; raise the Detail slider for more depth."
                   className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[12px] font-medium bg-fuchsia-600 text-white hover:bg-fuchsia-700 disabled:opacity-50"
                 >
                   <BookMarked className="w-3.5 h-3.5" />

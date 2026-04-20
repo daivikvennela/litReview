@@ -13,10 +13,12 @@ import {
   getSetting,
   setSetting,
   getArticlesExportRows,
+  folderFromPdfPath,
+  getDistinctArticleFolders,
+  insertParseOutput,
   type ArticleFilters,
 } from "../db.js";
-import { parsePdfToXml } from "../lib/grobid.js";
-import { buildArticleRecordFromTei } from "../lib/teiMetadata.js";
+import { parsePdfWithEngine, coerceEngine } from "../lib/pdfParsers/index.js";
 import { pickIntroSummaryLit } from "../lib/reviewPick.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
@@ -47,6 +49,7 @@ router.get("/export", (_req: Request, res: Response) => {
     "Section summary (LLM)",
     "Literature review (LLM)",
     "PDF filename",
+    "Folder (upload path)",
     "Parsed at (ISO)",
     "Links (JSON)",
   ];
@@ -66,6 +69,7 @@ router.get("/export", (_req: Request, res: Response) => {
         llm.summary ?? "",
         llm.literature_review ?? "",
         r.pdf_path ?? "",
+        r.folder ?? "",
         r.parsed_at ?? "",
         r.links_json ?? "",
       ];
@@ -84,6 +88,7 @@ router.get("/export", (_req: Request, res: Response) => {
     { wch: 48 },
     { wch: 48 },
     { wch: 28 },
+    { wch: 36 },
     { wch: 22 },
     { wch: 40 },
   ];
@@ -128,6 +133,10 @@ router.get("/export", (_req: Request, res: Response) => {
   res.send(Buffer.from(buf));
 });
 
+router.get("/folders", (_req: Request, res: Response) => {
+  res.json(getDistinctArticleFolders());
+});
+
 router.get("/", (req: Request, res: Response) => {
   const search = (req.query.search as string) || undefined;
   const sort = (req.query.sort as ArticleFilters["sort"]) || "parsed_at";
@@ -135,6 +144,8 @@ router.get("/", (req: Request, res: Response) => {
   const yearMin = req.query.year_min != null && req.query.year_min !== "" ? Number(req.query.year_min) : undefined;
   const yearMax = req.query.year_max != null && req.query.year_max !== "" ? Number(req.query.year_max) : undefined;
   const venue_type = (req.query.venue_type as string) || undefined;
+  const folder =
+    typeof req.query.folder === "string" && req.query.folder.length > 0 ? req.query.folder : undefined;
   const rawInc = req.query.include_xml;
   const include_xml =
     rawInc === undefined || rawInc === "" ? true : !["0", "false", "no"].includes(String(rawInc).toLowerCase());
@@ -149,6 +160,7 @@ router.get("/", (req: Request, res: Response) => {
     year_min: Number.isFinite(yearMin) ? yearMin : undefined,
     year_max: Number.isFinite(yearMax) ? yearMax : undefined,
     venue_type,
+    folder,
     include_xml,
   });
 
@@ -213,7 +225,7 @@ router.delete("/:id", (req: Request, res: Response) => {
   }
 });
 
-router.post("/batch", upload.array("pdfs", 50), async (req: Request, res: Response) => {
+router.post("/batch", upload.array("pdfs", 200), async (req: Request, res: Response) => {
   const files = (req.files as Express.Multer.File[]) || [];
   if (files.length === 0) {
     res.status(400).json({ error: "No PDF files uploaded" });
@@ -240,7 +252,12 @@ router.post("/batch", upload.array("pdfs", 50), async (req: Request, res: Respon
       if (existing?.xml) {
         // Even if we already have TEI cached for this content hash, update the displayed filename
         // and timestamp so Library reflects the most recent upload.
-        upsertArticle({ id, pdf_path: file.originalname, parsed_at: new Date().toISOString() });
+        upsertArticle({
+          id,
+          pdf_path: file.originalname,
+          parsed_at: new Date().toISOString(),
+          folder: folderFromPdfPath(file.originalname),
+        });
         send("progress", {
           current: i + 1,
           total: files.length,
@@ -253,9 +270,10 @@ router.post("/batch", upload.array("pdfs", 50), async (req: Request, res: Respon
 
       const xml = await parsePdfToXml(file.buffer, file.originalname, grobidUrl);
       const parsedAt = new Date().toISOString();
-      upsertArticle(
-        buildArticleRecordFromTei(xml, { id, pdf_path: file.originalname, parsed_at: parsedAt }),
-      );
+      upsertArticle({
+        ...buildArticleRecordFromTei(xml, { id, pdf_path: file.originalname, parsed_at: parsedAt }),
+        folder: folderFromPdfPath(file.originalname),
+      });
       send("progress", { current: i + 1, total: files.length, filename: file.originalname, status: "done" });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Parse failed";

@@ -8,6 +8,8 @@ export type UseArticlesParams = {
   year_min?: number
   year_max?: number
   venue_type?: string
+  folder?: string
+  include_xml?: boolean
 }
 
 export function useArticles(params?: UseArticlesParams) {
@@ -15,19 +17,19 @@ export function useArticles(params?: UseArticlesParams) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const { search, sort, order, year_min, year_max, venue_type } = params ?? {}
+  const { search, sort, order, year_min, year_max, venue_type, folder, include_xml } = params ?? {}
 
   useEffect(() => {
     setLoading(true)
-    getArticles({ search, sort, order, year_min, year_max, venue_type })
+    getArticles({ search, sort, order, year_min, year_max, venue_type, folder, include_xml })
       .then(setArticles)
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load'))
       .finally(() => setLoading(false))
-  }, [search, sort, order, year_min, year_max, venue_type])
+  }, [search, sort, order, year_min, year_max, venue_type, folder, include_xml])
 
   const refetch = () => {
     setError(null)
-    return getArticles({ search, sort, order, year_min, year_max, venue_type })
+    return getArticles({ search, sort, order, year_min, year_max, venue_type, folder, include_xml })
       .then(setArticles)
       .catch((e) => {
         setError(e instanceof Error ? e.message : 'Failed to load')

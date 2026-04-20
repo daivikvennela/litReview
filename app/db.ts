@@ -22,12 +22,32 @@ function articleColumnNames(database: Database.Database): Set<string> {
   return new Set(rows.map((r) => r.name));
 }
 
+/** Directory part of a relative upload path (`a/b/paper.pdf` → `a/b`). */
+export function folderFromPdfPath(pdfPath: string | null | undefined): string | null {
+  if (!pdfPath) return null;
+  const n = pdfPath.replace(/\\/g, "/");
+  const i = n.lastIndexOf("/");
+  if (i <= 0) return null;
+  return n.slice(0, i) || null;
+}
+
 function migrateArticlesColumns(database: Database.Database) {
   const names = articleColumnNames(database);
   if (!names.has("year")) database.exec("ALTER TABLE articles ADD COLUMN year INTEGER");
   if (!names.has("venue_type")) database.exec("ALTER TABLE articles ADD COLUMN venue_type TEXT");
   if (!names.has("venue_name")) database.exec("ALTER TABLE articles ADD COLUMN venue_name TEXT");
   if (!names.has("links_json")) database.exec("ALTER TABLE articles ADD COLUMN links_json TEXT");
+  if (!names.has("folder")) {
+    database.exec("ALTER TABLE articles ADD COLUMN folder TEXT");
+    const rows = database
+      .prepare("SELECT id, pdf_path FROM articles WHERE pdf_path IS NOT NULL")
+      .all() as Array<{ id: string; pdf_path: string }>;
+    const upd = database.prepare("UPDATE articles SET folder = ? WHERE id = ?");
+    for (const r of rows) {
+      const f = folderFromPdfPath(r.pdf_path);
+      if (f != null) upd.run(f, r.id);
+    }
+  }
 }
 
 function reviewColumnNames(database: Database.Database): Set<string> {
@@ -81,6 +101,18 @@ function initSchema(database: Database.Database) {
       key TEXT PRIMARY KEY,
       value TEXT
     );
+    CREATE TABLE IF NOT EXISTS article_parse_outputs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      article_id TEXT NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+      parser_engine TEXT NOT NULL,
+      parser_model TEXT,
+      output_format TEXT NOT NULL,
+      payload_json TEXT,
+      normalized_text TEXT,
+      is_primary INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_parse_outputs_article ON article_parse_outputs(article_id, created_at DESC);
   `);
   migrateArticlesColumns(database);
   migrateReviewsReviewDepth(database);
@@ -99,6 +131,7 @@ export interface Article {
   venue_type?: string | null;
   venue_name?: string | null;
   links_json?: string | null;
+  folder?: string | null;
 }
 
 export interface Review {
@@ -113,11 +146,13 @@ export interface Review {
 
 export interface ArticleFilters {
   search?: string;
-  sort?: "parsed_at" | "title";
+  sort?: "parsed_at" | "title" | "folder";
   order?: "asc" | "desc";
   year_min?: number;
   year_max?: number;
   venue_type?: string;
+  /** Exact folder path, or `__root__` for articles with no folder. */
+  folder?: string;
   /** When false, omit TEI XML from the query (smaller payloads for list/metadata views). Default true. */
   include_xml?: boolean;
 }
@@ -126,15 +161,15 @@ export function getArticles(filters: ArticleFilters = {}): Article[] {
   const database = getDb();
   const includeXml = filters.include_xml !== false;
   const selectCols = includeXml
-    ? "id, title, authors, abstract, pdf_path, xml, parsed_at, model_used, year, venue_type, venue_name, links_json"
-    : "id, title, authors, abstract, pdf_path, NULL AS xml, parsed_at, model_used, year, venue_type, venue_name, links_json";
+    ? "id, title, authors, abstract, pdf_path, xml, parsed_at, model_used, year, venue_type, venue_name, links_json, folder"
+    : "id, title, authors, abstract, pdf_path, NULL AS xml, parsed_at, model_used, year, venue_type, venue_name, links_json, folder";
   let sql = `SELECT ${selectCols} FROM articles WHERE 1=1`;
   const params: (string | number)[] = [];
   if (filters.search) {
     sql +=
-      " AND (title LIKE ? OR abstract LIKE ? OR authors LIKE ? OR IFNULL(venue_name,'') LIKE ? OR IFNULL(links_json,'') LIKE ?)";
+      " AND (title LIKE ? OR abstract LIKE ? OR authors LIKE ? OR IFNULL(venue_name,'') LIKE ? OR IFNULL(links_json,'') LIKE ? OR IFNULL(folder,'') LIKE ?)";
     const term = `%${filters.search}%`;
-    params.push(term, term, term, term, term);
+    params.push(term, term, term, term, term, term);
   }
   if (filters.year_min != null && Number.isFinite(filters.year_min)) {
     sql += " AND year IS NOT NULL AND year >= ?";
@@ -148,16 +183,26 @@ export function getArticles(filters: ArticleFilters = {}): Article[] {
     sql += " AND IFNULL(venue_type,'') = ?";
     params.push(filters.venue_type.trim());
   }
-  const sortCol = filters.sort === "title" ? "title" : "parsed_at";
+  if (filters.folder === "__root__") {
+    sql += " AND (folder IS NULL OR TRIM(IFNULL(folder,'')) = '')";
+  } else if (filters.folder != null && filters.folder.trim() !== "") {
+    sql += " AND folder = ?";
+    params.push(filters.folder.trim());
+  }
   const order = filters.order === "asc" ? "ASC" : "DESC";
-  sql += ` ORDER BY ${sortCol} ${order}`;
+  if (filters.sort === "folder") {
+    sql += ` ORDER BY IFNULL(folder,'') ${order}, parsed_at DESC`;
+  } else {
+    const sortCol = filters.sort === "title" ? "title" : "parsed_at";
+    sql += ` ORDER BY ${sortCol} ${order}`;
+  }
   return database.prepare(sql).all(...params) as Article[];
 }
 
 export function getArticle(id: string): Article | null {
   const database = getDb();
   const row = database.prepare(
-    "SELECT id, title, authors, abstract, pdf_path, xml, parsed_at, model_used, year, venue_type, venue_name, links_json FROM articles WHERE id = ?"
+    "SELECT id, title, authors, abstract, pdf_path, xml, parsed_at, model_used, year, venue_type, venue_name, links_json, folder FROM articles WHERE id = ?"
   ).get(id) as Article | undefined;
   return row ?? null;
 }
@@ -188,11 +233,12 @@ export function upsertArticle(article: {
   venue_type?: string | null;
   venue_name?: string | null;
   links_json?: string | null;
+  folder?: string | null;
 }): void {
   const database = getDb();
   database.prepare(`
-    INSERT INTO articles (id, title, authors, abstract, pdf_path, xml, parsed_at, model_used, year, venue_type, venue_name, links_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO articles (id, title, authors, abstract, pdf_path, xml, parsed_at, model_used, year, venue_type, venue_name, links_json, folder)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       title = COALESCE(excluded.title, title),
       authors = COALESCE(excluded.authors, authors),
@@ -204,7 +250,8 @@ export function upsertArticle(article: {
       year = COALESCE(excluded.year, year),
       venue_type = COALESCE(excluded.venue_type, venue_type),
       venue_name = COALESCE(excluded.venue_name, venue_name),
-      links_json = COALESCE(excluded.links_json, links_json)
+      links_json = COALESCE(excluded.links_json, links_json),
+      folder = COALESCE(excluded.folder, folder)
   `).run(
     article.id,
     article.title ?? null,
@@ -217,7 +264,8 @@ export function upsertArticle(article: {
     article.year ?? null,
     article.venue_type ?? null,
     article.venue_name ?? null,
-    article.links_json ?? null
+    article.links_json ?? null,
+    article.folder ?? null
   );
 }
 
@@ -232,12 +280,13 @@ export type ArticleExportRow = {
   venue_type: string | null;
   venue_name: string | null;
   links_json: string | null;
+  folder: string | null;
 };
 
 export function getArticlesExportRows(ids: string[] | null): ArticleExportRow[] {
   const database = getDb();
   const base =
-    "SELECT id, title, authors, abstract, pdf_path, parsed_at, year, venue_type, venue_name, links_json FROM articles";
+    "SELECT id, title, authors, abstract, pdf_path, parsed_at, year, venue_type, venue_name, links_json, folder FROM articles";
   if (ids && ids.length > 0) {
     const placeholders = ids.map(() => "?").join(",");
     return database.prepare(`${base} WHERE id IN (${placeholders}) ORDER BY parsed_at DESC`).all(...ids) as ArticleExportRow[];
@@ -301,6 +350,17 @@ export function getDatabaseFilePath(): string {
   return DB_PATH;
 }
 
+/** Distinct non-empty folder paths for library filters. */
+export function getDistinctArticleFolders(): string[] {
+  const database = getDb();
+  const rows = database
+    .prepare(
+      "SELECT DISTINCT folder AS f FROM articles WHERE folder IS NOT NULL AND TRIM(folder) != '' ORDER BY folder COLLATE NOCASE ASC",
+    )
+    .all() as Array<{ f: string }>;
+  return rows.map((r) => r.f);
+}
+
 export function getArticleCount(): number {
   const database = getDb();
   const row = database.prepare("SELECT COUNT(*) AS n FROM articles").get() as { n: number };
@@ -311,4 +371,78 @@ export function getReviewRowCount(): number {
   const database = getDb();
   const row = database.prepare("SELECT COUNT(*) AS n FROM reviews").get() as { n: number };
   return Number(row?.n ?? 0);
+}
+
+// -------- Parse outputs (non-TEI / VLM payloads) --------
+
+/** Normalized record for any parser engine; VLM payloads live here rather than on `articles`. */
+export interface ArticleParseOutput {
+  id: number;
+  article_id: string;
+  parser_engine: string;
+  parser_model: string | null;
+  output_format: string;
+  payload_json: string | null;
+  normalized_text: string | null;
+  is_primary: number;
+  created_at: string;
+}
+
+export function insertParseOutput(row: {
+  article_id: string;
+  parser_engine: string;
+  parser_model?: string | null;
+  output_format: string;
+  payload_json?: string | null;
+  normalized_text?: string | null;
+  is_primary?: boolean;
+}): number {
+  const database = getDb();
+  if (row.is_primary) {
+    database
+      .prepare("UPDATE article_parse_outputs SET is_primary = 0 WHERE article_id = ?")
+      .run(row.article_id);
+  }
+  const info = database
+    .prepare(
+      `INSERT INTO article_parse_outputs
+        (article_id, parser_engine, parser_model, output_format, payload_json, normalized_text, is_primary)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      row.article_id,
+      row.parser_engine,
+      row.parser_model ?? null,
+      row.output_format,
+      row.payload_json ?? null,
+      row.normalized_text ?? null,
+      row.is_primary ? 1 : 0,
+    );
+  return Number(info.lastInsertRowid);
+}
+
+export function getLatestParseOutput(articleId: string): ArticleParseOutput | null {
+  const database = getDb();
+  const row = database
+    .prepare(
+      `SELECT id, article_id, parser_engine, parser_model, output_format, payload_json, normalized_text, is_primary, created_at
+       FROM article_parse_outputs
+       WHERE article_id = ?
+       ORDER BY is_primary DESC, created_at DESC
+       LIMIT 1`,
+    )
+    .get(articleId) as ArticleParseOutput | undefined;
+  return row ?? null;
+}
+
+export function listParseOutputs(articleId: string): ArticleParseOutput[] {
+  const database = getDb();
+  return database
+    .prepare(
+      `SELECT id, article_id, parser_engine, parser_model, output_format, payload_json, normalized_text, is_primary, created_at
+       FROM article_parse_outputs
+       WHERE article_id = ?
+       ORDER BY created_at DESC`,
+    )
+    .all(articleId) as ArticleParseOutput[];
 }

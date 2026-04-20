@@ -159,58 +159,90 @@ You help draft **Introduction** and **Abstract** text for a piece that synthesiz
 - Do not reference papers outside the provided context.`;
 }
 
+const RELATED_WORK_RESEARCH_BAR = `
+**Research-grade bar (non-negotiable)**
+- Write for an expert reader: comparative, skeptical, and precise. Avoid generic filler and “paper-by-paper” laundry lists unless the scope is tiny (2–3 papers) and the prompt demands itemization.
+- Organize by **themes / research threads** (problems, methods, settings, findings). Within each theme, **compare across papers**: what differs in setup, assumptions, evidence, and conclusions?
+- Clearly separate **supported** claims (with citations) from **tentative** interpretations; if the excerpts do not support a stronger claim, say **“not evidenced in the provided text”** and do not invent numbers, baselines, or external references.
+- Surface **tensions and disagreements** when papers conflict; do not flatten contradictions.
+- End with **limitations, gaps, and open questions** grounded in what the texts actually say.
+`.trim();
+
 export function getRelatedWorkCompileSystem(detailLevel: 0 | 1 | 2 | 3): string {
+  const agendaBlock =
+    detailLevel >= 3
+      ? `
+## Research agenda (optional but recommended at this depth)
+- 4–6 concrete next-step directions **explicitly tied** to gaps you identified above (each bullet should echo a gap or limitation you already stated).
+`.trim()
+      : "";
+
   if (detailLevel >= 2) {
     return `${ACADEMIC_STYLE_BLOCK}
 
-You are compiling a **Related Works** section across the selected papers (2-50 in scope).
+You are writing a **Related Works** section suitable for a strong conference or journal submission. The user selected **2–50** papers; your job is **thematic synthesis and comparison**, not a catalog of abstracts.
 
-**Output structure (Markdown)**
-## Related Works (Compiled)
-- Organize with thematic and sub-thematic headings.
-- Compare approaches, assumptions, evidence quality, limitations, and contradictions.
-- Include a concise evolution narrative for each major theme.
+${RELATED_WORK_RESEARCH_BAR}
 
-## Synthesis Takeaways
-- 6-10 bullets with strongest conclusions, unresolved tensions, and concrete gap statements.
+**Output structure (Markdown) — use these section titles**
+## Related Works
+### Landscape and scope
+- 1–2 tight paragraphs framing the problem family, common settings, and what this literature cluster is trying to solve (only as evidenced in the excerpts).
 
-${detailLevel === 3 ? "## Research Agenda\n- Provide 4-6 concrete, evidence-grounded future directions that follow from the identified gaps.\n" : ""}
+### Thematic synthesis
+- Multiple \`###\` sub-themes. In each: integrate **multiple papers**, compare methods/assumptions/evidence, and call out agreement vs conflict.
+- Prefer dense paragraphs with frequent \`[n](cite:INTERNAL_ID)\` citations after substantive claims.
+
+### Limitations, conflicts, and gaps
+- What remains brittle, under-explored, or disputed across the selected works (grounded in text).
+
+## Synthesis takeaways
+- ${detailLevel >= 3 ? "8–12" : "6–10"} bullets: crisp, high-signal conclusions + **explicit gap statements**.
+
+${agendaBlock}
+
 **Citations**
-- Use \`[n](cite:INTERNAL_ID)\` for every specific claim.
-- Do not cite papers outside the provided context.`;
+- Use \`[n](cite:INTERNAL_ID)\` for **every** substantive, paper-specific claim (aim for high citation density; reuse index \`n\` only when repeating the same target).
+- Do not cite or name papers not present in the context blocks.`;
   }
   if (detailLevel === 1) {
     return `${ACADEMIC_STYLE_BLOCK}
 
-You are compiling a **Related Works** section across the selected papers (2-50 in scope).
+You are writing a **Related Works** section across **2–50** selected papers. The output must read as **integrated research synthesis**, not isolated mini-summaries.
+
+${RELATED_WORK_RESEARCH_BAR}
 
 **Output structure (Markdown)**
-## Related Works (Compiled)
-- Organize with thematic subheadings.
-- Under each theme, compare approaches, evidence, strengths/limitations, and unresolved gaps.
-- Explicitly note how lines of work evolved and where findings conflict.
+## Related Works
+### Thematic overview
+- Several paragraphs organized by sub-themes (\`###\`). In each theme, **compare** methods, datasets/metrics, and findings across papers.
 
-## Synthesis Takeaways
-- 4-8 bullets with high-confidence conclusions and open research gaps.
+### Limitations and gaps
+- Short subsection on what is missing, weakly supported, or contested in the excerpts.
+
+## Synthesis takeaways
+- 5–8 bullets: main conclusions + concrete research gaps.
 
 **Citations**
-- Use \`[n](cite:INTERNAL_ID)\` for every specific claim.
+- Use \`[n](cite:INTERNAL_ID)\` for specific claims tied to a paper, as described in the context block.
 - Do not cite papers outside the provided context.`;
   }
   return `${ACADEMIC_STYLE_BLOCK}
 
-You are compiling a **Related Works** section across the selected papers (2-50 in scope).
+You are writing a **Related Works** section across **2–50** papers at a **concise** length while still meeting a **research-level** standard: integration, comparison, and honest uncertainty.
+
+${RELATED_WORK_RESEARCH_BAR}
 
 **Output structure (Markdown)**
-## Related Works (Compiled)
-- Write a cohesive 3-5 paragraph narrative that synthesizes prior approaches, trends, and gaps.
-- Focus on common themes and key contrasts.
+## Related Works
+- **Thematic narrative** (not one paragraph per paper): use \`###\` subheadings for 2–4 themes. In each, contrast approaches and evidence **across papers**.
+- One short subsection **Limitations & gaps** (bullets OK).
 
-## Synthesis Takeaways
-- Provide 3-5 concise bullets with main gaps and opportunities.
+## Synthesis takeaways
+- 4–6 bullets: key contrasts, limitations, and open questions.
 
 **Citations**
-- Use \`[n](cite:INTERNAL_ID)\` for every specific claim.
+- Use \`[n](cite:INTERNAL_ID)\` for substantive paper-specific claims; if you must stay brief, still cite the main claims you rely on.
 - Do not cite papers outside the provided context.`;
 }
 

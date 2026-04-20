@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { multipartFilenameForPdf } from '@/lib/pdfUploadHelpers'
 
 export const api = axios.create({ baseURL: '/api' })
 
@@ -16,6 +17,8 @@ export interface Article {
   venue_type?: string | null
   venue_name?: string | null
   links_json?: string | null
+  /** Relative folder from nested upload paths (e.g. `project/papers`). */
+  folder?: string | null
   /** Present when listing with `include_reviews` — cached LLM outputs */
   llm_intro?: string | null
   llm_summary?: string | null
@@ -94,11 +97,16 @@ export const getArticles = (params?: {
   year_min?: number
   year_max?: number
   venue_type?: string
+  /** Filter by folder path, or `__root__` for PDFs not under a subfolder. */
+  folder?: string
   /** Omit TEI XML for lighter list responses (Metadata page, etc.). Default true. */
   include_xml?: boolean
   /** Attach cached LLM fields (intro, section summary, literature review). */
   include_reviews?: boolean
 }) => api.get<Article[]>('/articles', { params }).then((r) => r.data)
+
+export const getArticleFolders = () =>
+  api.get<string[]>('/articles/folders').then((r) => r.data)
 
 export type ArticleMeta = Pick<Article, 'id' | 'title' | 'pdf_path'>
 
@@ -198,7 +206,7 @@ export function parseArticleBatch(
   onProgress: (ev: BatchProgressEvent) => void
 ): Promise<void> {
   const form = new FormData()
-  files.forEach((f) => form.append('pdfs', f))
+  files.forEach((f) => form.append('pdfs', f, multipartFilenameForPdf(f)))
   return fetch('/api/articles/batch', {
     method: 'POST',
     body: form,
@@ -207,18 +215,30 @@ export function parseArticleBatch(
     const reader = res.body!.getReader()
     const decoder = new TextDecoder()
     let buf = ''
+    const processLine = (line: string) => {
+      if (!line.startsWith('data: ')) return
+      const payload = line.slice(6).trim()
+      if (payload === '[DONE]') return
+      try {
+        const data = JSON.parse(payload) as BatchProgressEvent
+        onProgress(data)
+      } catch {
+        /* ignore */
+      }
+    }
     while (true) {
       const { done, value } = await reader.read()
-      if (done) break
-      buf += decoder.decode(value, { stream: true })
+      if (value) buf += decoder.decode(value, { stream: true })
+      if (done) {
+        for (const line of buf.split('\n')) {
+          if (line.length) processLine(line)
+        }
+        break
+      }
       const lines = buf.split('\n')
       buf = lines.pop() ?? ''
       for (const line of lines) {
-        if (!line.startsWith('data: ')) continue
-        try {
-          const data = JSON.parse(line.slice(6)) as BatchProgressEvent
-          onProgress(data)
-        } catch {}
+        if (line.length) processLine(line)
       }
     }
   })

@@ -1,7 +1,14 @@
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Components } from 'react-markdown'
 import { Link } from 'react-router-dom'
+
+/** react-markdown strips unknown URL schemes; `cite:` is required for library superscript links. */
+function citationUrlTransform(url: string): string {
+  const t = url.trim()
+  if (t.toLowerCase().startsWith('cite:')) return t
+  return defaultUrlTransform(url)
+}
 
 const proseClasses = 'prose prose-sm max-w-none text-slate-700 dark:text-slate-200'
 
@@ -106,7 +113,11 @@ export default function MarkdownContent({
 
   return (
     <div className={`${proseClasses} ${className}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={merged}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={merged}
+        urlTransform={citationUrlTransform}
+      >
         {md}
       </ReactMarkdown>
       {citationArticles && citationArticles.length > 0 && citationRefPrefix && (

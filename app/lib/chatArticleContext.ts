@@ -6,10 +6,15 @@ function stripTags(xml: string): string {
   return xml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
+export type ArticleContextOptions = {
+  /** When set, adds task-specific framing on top of the default preamble. */
+  mode?: string;
+};
+
 /**
  * Builds a system-prompt block with full text for scoped chat (~100k chars total split across articles).
  */
-export function buildArticleContextSystemBlock(articleIds: string[]): string | null {
+export function buildArticleContextSystemBlock(articleIds: string[], options?: ArticleContextOptions): string | null {
   const ids = [...new Set(articleIds.map((id) => id.trim()).filter(Boolean))];
   if (ids.length === 0) return null;
 
@@ -35,9 +40,14 @@ export function buildArticleContextSystemBlock(articleIds: string[]): string | n
   if (blobs.length === 0) return null;
 
   const perArticle = Math.max(4_000, Math.floor(MAX_TOTAL_CHARS / blobs.length));
-  const preamble =
+  let preamble =
     "The user is asking about ONLY the following research article(s). Ground factual claims in this text only. " +
     "If something is not stated here, say it is not in the provided document(s). Do not invent citations, numbers, or results.";
+  if (options?.mode === "related_work_compile") {
+    preamble +=
+      " Task: produce a publication-quality **Related Works** synthesis across these papers — thematic comparison first; " +
+      "avoid turning the section into a disconnected list of per-paper abstracts unless the evidence base is extremely thin.";
+  }
   const citationStyle = `
 ### Inline citations (required for claims from the papers)
 Whenever you state a specific fact, number, method, quote, or finding from the documents, add a **small superscript-style Markdown link** immediately after that claim so the UI can hyperlink it:
