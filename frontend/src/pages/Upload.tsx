@@ -1,12 +1,29 @@
 import { useEffect, useRef, useState } from 'react'
 import { Upload as UploadIcon, FileText, CheckCircle2, AlertCircle, Loader2, FolderOpen } from 'lucide-react'
-import { parseArticleBatch } from '@/lib/api'
+import { parseArticleBatch, getSettings, type ParserEngine } from '@/lib/api'
 import { useArticles } from '@/hooks/useArticles'
 import {
   gatherPdfFilesFromDataTransfer,
   isPdfLike,
   multipartFilenameForPdf,
 } from '@/lib/pdfUploadHelpers'
+
+const PARSER_ENGINE_ORDER: ParserEngine[] = ['opendataloader', 'grobid', 'openrouter_vlm', 'ollama_vlm']
+
+const PARSER_ENGINE_LABELS: Record<ParserEngine, string> = {
+  opendataloader: 'OpenDataLoader (default)',
+  grobid: 'GROBID (TEI XML)',
+  openrouter_vlm: 'OpenRouter Vision LM',
+  ollama_vlm: 'Local Ollama Vision LM',
+}
+
+const PARSER_ENGINE_HINTS: Record<ParserEngine, string> = {
+  opendataloader:
+    'Structured JSON + Markdown locally (Java 11+). Hybrid/OCR in Settings. Best for RAG-quality text.',
+  grobid: 'Deterministic structured parse to TEI XML. Requires GROBID running.',
+  openrouter_vlm: 'Sends rasterized PDF pages to a hosted vision LM. Requires OpenRouter API key + pdftoppm (Poppler).',
+  ollama_vlm: 'Sends rasterized PDF pages to a local Ollama VLM (e.g. qwen2.5vl:7b). Requires Ollama + pdftoppm (Poppler).',
+}
 
 type FileStatus = 'pending' | 'parsing' | 'done' | 'error'
 
@@ -27,6 +44,8 @@ export default function Upload() {
   const [parsing, setParsing] = useState(false)
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 })
   const [batchNotice, setBatchNotice] = useState<string | null>(null)
+  const [engine, setEngine] = useState<ParserEngine>('opendataloader')
+  const [modelOverride, setModelOverride] = useState<string>('')
   const folderInputRef = useRef<HTMLInputElement>(null)
   const { refetch } = useArticles()
 
@@ -35,6 +54,19 @@ export default function Upload() {
     if (!el) return
     el.setAttribute('webkitdirectory', '')
     el.setAttribute('directory', '')
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    getSettings()
+      .then((s) => {
+        if (cancelled) return
+        if (s.pdf_parser_default_engine) setEngine(s.pdf_parser_default_engine)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const addPdfFiles = (incoming: File[]) => {
@@ -59,11 +91,33 @@ export default function Upload() {
   }
 
   const setFileStatusByKey = (key: string, status: FileStatus, error?: string, cached?: boolean) => {
-    setFiles((prev) =>
-      prev.map((item) =>
+    setFiles((prev) => {
+      const matched = prev.some((item) => item.key === key)
+      // #region agent log
+      fetch('http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '895971' },
+        body: JSON.stringify({
+          sessionId: '895971',
+          location: 'Upload.tsx:setFileStatusByKey',
+          message: 'client_set_status',
+          data: {
+            key,
+            status,
+            matched,
+            keyBytes: new TextEncoder().encode(key).length,
+            firstKnownKeys: prev.slice(0, 4).map((p) => p.key),
+          },
+          timestamp: Date.now(),
+          hypothesisId: 'H2-H5',
+          runId: 'upload-sse-debug',
+        }),
+      }).catch(() => {})
+      // #endregion
+      return prev.map((item) =>
         item.key === key ? { ...item, status, error, cached: cached ?? item.cached } : item,
-      ),
-    )
+      )
+    })
   }
 
   const parseAll = async () => {
@@ -77,6 +131,25 @@ export default function Upload() {
     )
     setParsing(true)
     setBatchProgress({ current: 0, total: capped.length })
+    // #region agent log
+    fetch('http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '895971' },
+      body: JSON.stringify({
+        sessionId: '895971',
+        location: 'Upload.tsx:parseAll entry',
+        message: 'client_parse_all_start',
+        data: {
+          cappedCount: capped.length,
+          engine,
+          firstKeys: capped.slice(0, 4).map((f) => f.key),
+        },
+        timestamp: Date.now(),
+        hypothesisId: 'H2',
+        runId: 'upload-sse-debug',
+      }),
+    }).catch(() => {})
+    // #endregion
     try {
       await parseArticleBatch(
         capped.map((f) => f.file),
@@ -99,8 +172,29 @@ export default function Upload() {
             setBatchProgress((p) => ({ current: p.total || capped.length, total: p.total || capped.length }))
           }
         },
+        {
+          engine,
+          model: modelOverride.trim() || undefined,
+        },
       )
       refetch()
+    } catch (err) {
+      // #region agent log
+      fetch('http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '895971' },
+        body: JSON.stringify({
+          sessionId: '895971',
+          location: 'Upload.tsx:parseAll catch',
+          message: 'client_parse_all_error',
+          data: { err: String(err) },
+          timestamp: Date.now(),
+          hypothesisId: 'H3',
+          runId: 'upload-sse-debug',
+        }),
+      }).catch(() => {})
+      // #endregion
+      throw err
     } finally {
       setParsing(false)
     }
@@ -121,8 +215,9 @@ export default function Upload() {
           Upload PDFs
         </h1>
         <p className="text-slate-500 text-sm mt-1">
-          Drop PDFs or entire folders (nested folders supported in Chromium-based browsers). Files are parsed with GROBID
-          and added to your library. Paths under a chosen folder are preserved in the library filename.
+          Drop PDFs or entire folders (nested folders supported in Chromium-based browsers). Files are parsed with the
+          engine selected below and added to your library. Paths under a chosen folder are preserved in the library
+          filename.
         </p>
         <p className="text-slate-400 text-xs mt-2">
           Up to {BATCH_PARSE_MAX} PDFs per &quot;Parse all&quot; run.
@@ -142,51 +237,127 @@ export default function Upload() {
           addPdfFiles(gathered)
         }}
         className={`
-          border-2 border-dashed rounded-2xl p-12 text-center transition-colors
-          ${dragging ? 'border-violet-500 bg-violet-50/50' : 'border-slate-200 bg-slate-50/50'}
+          relative overflow-hidden rounded-3xl border p-12 text-center transition-all duration-300
+          ${dragging
+            ? 'border-violet-300/60 shadow-[0_0_0_4px_rgba(139,92,246,0.15)] -translate-y-0.5'
+            : 'border-white/10 hover:border-white/20'}
         `}
+        style={{
+          background:
+            'linear-gradient(135deg, #0f172a 0%, #1e1b4b 35%, #312e81 60%, #1e293b 100%)',
+        }}
       >
-        <input
-          type="file"
-          accept=".pdf,application/pdf"
-          multiple
-          className="hidden"
-          id="pdf-input"
-          onChange={(e) => {
-            addFilesFromInput(e.target.files)
-            e.target.value = ''
-          }}
-        />
-        <input
-          ref={folderInputRef}
-          type="file"
-          accept=".pdf,application/pdf"
-          multiple
-          className="hidden"
-          id="pdf-folder-input"
-          onChange={(e) => {
-            addFilesFromInput(e.target.files)
-            e.target.value = ''
-          }}
-        />
-        <FileText className="w-12 h-12 mx-auto text-slate-400 mb-3" />
-        <p className="text-slate-600 font-medium">Drop PDFs or folders here</p>
-        <p className="text-slate-400 text-sm mt-1">GROBID must be running (see Settings)</p>
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-          <label
-            htmlFor="pdf-input"
-            className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-medium hover:bg-violet-700"
-          >
-            Choose PDF files
-          </label>
-          <label
-            htmlFor="pdf-folder-input"
-            className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
-          >
-            <FolderOpen className="w-4 h-4" />
-            Choose folder
-          </label>
+        {/* Ambient glow accents — match landing page */}
+        <div className="pointer-events-none absolute -top-20 -right-16 h-56 w-56 rounded-full bg-fuchsia-500/25 blur-[80px]" />
+        <div className="pointer-events-none absolute -bottom-24 -left-16 h-56 w-56 rounded-full bg-cyan-500/20 blur-[80px]" />
+        <div className="pointer-events-none absolute top-1/2 left-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-500/20 blur-[70px]" />
+
+        <div className="relative">
+          <input
+            type="file"
+            accept=".pdf,application/pdf"
+            multiple
+            className="hidden"
+            id="pdf-input"
+            onChange={(e) => {
+              addFilesFromInput(e.target.files)
+              e.target.value = ''
+            }}
+          />
+          <input
+            ref={folderInputRef}
+            type="file"
+            accept=".pdf,application/pdf"
+            multiple
+            className="hidden"
+            id="pdf-folder-input"
+            onChange={(e) => {
+              addFilesFromInput(e.target.files)
+              e.target.value = ''
+            }}
+          />
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-sm mb-4 shadow-lg shadow-black/20">
+            <FileText className="w-7 h-7 text-cyan-200" />
+          </div>
+          <p className="text-white text-lg font-semibold tracking-tight">Drop PDFs or folders here</p>
+          <p className="text-slate-300/90 text-sm mt-1.5 max-w-md mx-auto leading-relaxed">
+            Default: OpenDataLoader (Java 11+). GROBID optional for TEI — see Settings.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <label
+              htmlFor="pdf-input"
+              className="cursor-pointer inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-white text-slate-900 text-sm font-semibold shadow-lg shadow-black/20 hover:bg-slate-100 transition-transform hover:-translate-y-0.5"
+            >
+              Choose PDF files
+            </label>
+            <label
+              htmlFor="pdf-folder-input"
+              className="cursor-pointer inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl border border-white/20 bg-white/5 text-white text-sm font-semibold backdrop-blur-sm hover:bg-white/10 transition-colors"
+            >
+              <FolderOpen className="w-4 h-4" />
+              Choose folder
+            </label>
+          </div>
         </div>
+      </div>
+
+      <div className="mt-5 bg-white rounded-2xl border border-slate-100 shadow-card p-4 dark:bg-slate-900 dark:border-slate-800">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
+            Parser engine
+          </span>
+          <a
+            href="/settings"
+            className="text-[12px] text-violet-600 hover:underline dark:text-violet-400"
+          >
+            Configure defaults
+          </a>
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+          {PARSER_ENGINE_ORDER.map((key) => {
+            const isActive = engine === key
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setEngine(key)}
+                className={`text-left rounded-xl border px-3 py-2 transition-colors ${
+                  isActive
+                    ? 'border-violet-500 bg-violet-50/70 dark:bg-violet-950/30 dark:border-violet-400'
+                    : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100/60 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:bg-slate-800'
+                }`}
+              >
+                <div className="text-[13px] font-medium text-slate-800 dark:text-slate-100">
+                  {PARSER_ENGINE_LABELS[key]}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5 leading-snug dark:text-slate-400">
+                  {PARSER_ENGINE_HINTS[key]}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+        {engine !== 'grobid' && engine !== 'opendataloader' && (
+          <div className="mt-3">
+            <label className="text-[12px] text-slate-500 block mb-1 dark:text-slate-400">
+              Model override (optional)
+            </label>
+            <input
+              type="text"
+              value={modelOverride}
+              onChange={(e) => setModelOverride(e.target.value)}
+              placeholder={
+                engine === 'openrouter_vlm'
+                  ? 'e.g. qwen/qwen2.5-vl-72b-instruct:free'
+                  : 'e.g. qwen2.5vl:7b'
+              }
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] focus:outline-none focus:ring-2 focus:ring-violet-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+            />
+            <p className="text-[11px] text-slate-400 mt-1 dark:text-slate-500">
+              Leave blank to use the default configured in Settings.
+            </p>
+          </div>
+        )}
       </div>
 
       {batchNotice && (

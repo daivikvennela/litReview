@@ -12,6 +12,8 @@ export function getDb(): Database.Database {
   if (!db) {
     if (!existsSync(LITREVIEW_DIR)) mkdirSync(LITREVIEW_DIR, { recursive: true });
     db = new Database(DB_PATH);
+    // Required so `ON DELETE CASCADE` on reviews + article_parse_outputs actually fires.
+    db.pragma("foreign_keys = ON");
     initSchema(db);
   }
   return db;
@@ -48,11 +50,45 @@ function migrateArticlesColumns(database: Database.Database) {
       if (f != null) upd.run(f, r.id);
     }
   }
+  if (!names.has("parser_engine")) {
+    database.exec("ALTER TABLE articles ADD COLUMN parser_engine TEXT");
+    // Backfill: pre-VLM rows came from GROBID, so assume grobid where TEI XML is present.
+    database.exec(
+      "UPDATE articles SET parser_engine = 'grobid' WHERE parser_engine IS NULL AND xml IS NOT NULL AND TRIM(xml) != ''",
+    );
+    // If an article has a parse output logged (newer VLM rows), prefer the most recent engine from there.
+    const hasParseOutputs = database
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='article_parse_outputs'")
+      .get() as { name?: string } | undefined;
+    if (hasParseOutputs?.name) {
+      database.exec(`
+        UPDATE articles
+        SET parser_engine = (
+          SELECT apo.parser_engine
+          FROM article_parse_outputs apo
+          WHERE apo.article_id = articles.id
+          ORDER BY apo.is_primary DESC, apo.created_at DESC
+          LIMIT 1
+        )
+        WHERE parser_engine IS NULL
+          AND EXISTS (SELECT 1 FROM article_parse_outputs apo2 WHERE apo2.article_id = articles.id)
+      `);
+    }
+  }
 }
 
 function reviewColumnNames(database: Database.Database): Set<string> {
   const rows = database.prepare("PRAGMA table_info(reviews)").all() as Array<{ name: string }>;
   return new Set(rows.map((r) => r.name));
+}
+
+/** New installs default to OpenDataLoader; existing DBs keep their stored engine if set. */
+function migrateDefaultParserEngine(database: Database.Database) {
+  database.exec(`
+    INSERT INTO settings (key, value)
+    SELECT 'pdf_parser_default_engine', 'opendataloader'
+    WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key = 'pdf_parser_default_engine');
+  `);
 }
 
 function migrateReviewsReviewDepth(database: Database.Database) {
@@ -116,6 +152,7 @@ function initSchema(database: Database.Database) {
   `);
   migrateArticlesColumns(database);
   migrateReviewsReviewDepth(database);
+  migrateDefaultParserEngine(database);
 }
 
 export interface Article {
@@ -132,6 +169,7 @@ export interface Article {
   venue_name?: string | null;
   links_json?: string | null;
   folder?: string | null;
+  parser_engine?: string | null;
 }
 
 export interface Review {
@@ -161,8 +199,8 @@ export function getArticles(filters: ArticleFilters = {}): Article[] {
   const database = getDb();
   const includeXml = filters.include_xml !== false;
   const selectCols = includeXml
-    ? "id, title, authors, abstract, pdf_path, xml, parsed_at, model_used, year, venue_type, venue_name, links_json, folder"
-    : "id, title, authors, abstract, pdf_path, NULL AS xml, parsed_at, model_used, year, venue_type, venue_name, links_json, folder";
+    ? "id, title, authors, abstract, pdf_path, xml, parsed_at, model_used, year, venue_type, venue_name, links_json, folder, parser_engine"
+    : "id, title, authors, abstract, pdf_path, NULL AS xml, parsed_at, model_used, year, venue_type, venue_name, links_json, folder, parser_engine";
   let sql = `SELECT ${selectCols} FROM articles WHERE 1=1`;
   const params: (string | number)[] = [];
   if (filters.search) {
@@ -202,7 +240,7 @@ export function getArticles(filters: ArticleFilters = {}): Article[] {
 export function getArticle(id: string): Article | null {
   const database = getDb();
   const row = database.prepare(
-    "SELECT id, title, authors, abstract, pdf_path, xml, parsed_at, model_used, year, venue_type, venue_name, links_json, folder FROM articles WHERE id = ?"
+    "SELECT id, title, authors, abstract, pdf_path, xml, parsed_at, model_used, year, venue_type, venue_name, links_json, folder, parser_engine FROM articles WHERE id = ?"
   ).get(id) as Article | undefined;
   return row ?? null;
 }
@@ -234,11 +272,12 @@ export function upsertArticle(article: {
   venue_name?: string | null;
   links_json?: string | null;
   folder?: string | null;
+  parser_engine?: string | null;
 }): void {
   const database = getDb();
   database.prepare(`
-    INSERT INTO articles (id, title, authors, abstract, pdf_path, xml, parsed_at, model_used, year, venue_type, venue_name, links_json, folder)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO articles (id, title, authors, abstract, pdf_path, xml, parsed_at, model_used, year, venue_type, venue_name, links_json, folder, parser_engine)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       title = COALESCE(excluded.title, title),
       authors = COALESCE(excluded.authors, authors),
@@ -251,7 +290,8 @@ export function upsertArticle(article: {
       venue_type = COALESCE(excluded.venue_type, venue_type),
       venue_name = COALESCE(excluded.venue_name, venue_name),
       links_json = COALESCE(excluded.links_json, links_json),
-      folder = COALESCE(excluded.folder, folder)
+      folder = COALESCE(excluded.folder, folder),
+      parser_engine = COALESCE(excluded.parser_engine, parser_engine)
   `).run(
     article.id,
     article.title ?? null,
@@ -265,7 +305,8 @@ export function upsertArticle(article: {
     article.venue_type ?? null,
     article.venue_name ?? null,
     article.links_json ?? null,
-    article.folder ?? null
+    article.folder ?? null,
+    article.parser_engine ?? null
   );
 }
 
@@ -297,6 +338,13 @@ export function getArticlesExportRows(ids: string[] | null): ArticleExportRow[] 
 export function deleteArticle(id: string): void {
   const database = getDb();
   database.prepare("DELETE FROM articles WHERE id = ?").run(id);
+}
+
+/** Remove every article (and cascade deletes reviews + parse outputs). Returns the count removed. */
+export function deleteAllArticles(): number {
+  const database = getDb();
+  const info = database.prepare("DELETE FROM articles").run();
+  return Number(info.changes ?? 0);
 }
 
 export function getReviews(articleId: string): Review[] {

@@ -24,6 +24,18 @@ fi
 echo "Using Node: $(node -v)"
 echo "Using npm:  $(npm -v)"
 
+if command -v java >/dev/null 2>&1; then
+  JAVA_VER_LINE="$(java -version 2>&1 | head -1 || true)"
+  echo "Using Java: $JAVA_VER_LINE"
+  if java -version 2>&1 | grep -qE 'version "1\.(8|9)\.'; then
+    echo "WARNING: Java 8/9 detected. OpenDataLoader (default PDF parser) needs JDK 11+."
+    echo "         Install from https://adoptium.net/ and ensure \`java -version\` shows 11 or higher."
+  fi
+else
+  echo "WARNING: Java not found. OpenDataLoader (default PDF parser) requires JDK 11+."
+  echo "         Install from https://adoptium.net/ and re-open your terminal."
+fi
+
 echo ""
 echo "-> Installing root dependencies..."
 cd "$REPO_DIR"
@@ -88,4 +100,7 @@ echo "Next:"
 echo "  1) If needed, edit .env for OPENROUTER_API_KEY / GROBID_URL"
 echo "  2) Run app: npm start"
 echo "  3) For dev mode: npm run dev"
+echo ""
+echo "OpenDataLoader (default PDF parser) optional hybrid (OCR / tables):"
+echo "  pip install \"opendataloader-pdf[hybrid]\" && opendataloader-pdf-hybrid --port 5002"
 echo ""

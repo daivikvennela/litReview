@@ -19,6 +19,8 @@ export interface Article {
   links_json?: string | null
   /** Relative folder from nested upload paths (e.g. `project/papers`). */
   folder?: string | null
+  /** Parser engine used when the article was (most recently) parsed. */
+  parser_engine?: string | null
   /** Present when listing with `include_reviews` — cached LLM outputs */
   llm_intro?: string | null
   llm_summary?: string | null
@@ -39,6 +41,8 @@ export interface Review {
   created_at: string
 }
 
+export type ParserEngine = 'opendataloader' | 'grobid' | 'openrouter_vlm' | 'ollama_vlm'
+
 export interface Settings {
   openrouter_api_key?: string
   grobid_url?: string
@@ -47,6 +51,17 @@ export interface Settings {
   default_model_task1?: string
   default_model_task2?: string
   default_model_task3?: string
+  pdf_parser_default_engine?: ParserEngine
+  pdf_parser_openrouter_model?: string
+  ollama_url?: string
+  pdf_parser_ollama_model?: string
+  opendataloader_hybrid_enabled?: string
+  opendataloader_hybrid_url?: string
+  opendataloader_force_ocr?: string
+  opendataloader_ocr_lang?: string
+  opendataloader_enrich_formula?: string
+  opendataloader_enrich_picture_description?: string
+  opendataloader_use_struct_tree?: string
 }
 
 // ----- Legacy types (for gradual migration) -----
@@ -181,10 +196,20 @@ export const getArticleXml = (id: string) =>
 export const deleteArticle = (id: string) =>
   api.delete(`/articles/${id}`)
 
-// ----- Parse (PDF -> XML, stored as article) -----
-export const parseArticle = (file: File) => {
+export const deleteAllArticles = () =>
+  api.delete<{ removed: number }>('/articles/all').then((r) => r.data)
+
+// ----- Parse (PDF -> XML/markdown, stored as article) -----
+export interface ParseOptions {
+  engine?: ParserEngine
+  model?: string
+}
+
+export const parseArticle = (file: File, opts: ParseOptions = {}) => {
   const form = new FormData()
   form.append('pdf', file)
+  if (opts.engine) form.append('parser_engine', opts.engine)
+  if (opts.model) form.append('parser_model', opts.model)
   return api.post<string>('/parse', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
     responseType: 'text',
@@ -199,18 +224,70 @@ export type BatchProgressEvent = {
   status?: string
   error?: string
   cached?: boolean
+  engine?: ParserEngine
+  format?: string
 }
 
 export function parseArticleBatch(
   files: File[],
-  onProgress: (ev: BatchProgressEvent) => void
+  onProgress: (ev: BatchProgressEvent) => void,
+  opts: ParseOptions = {}
 ): Promise<void> {
   const form = new FormData()
   files.forEach((f) => form.append('pdfs', f, multipartFilenameForPdf(f)))
+  if (opts.engine) form.append('parser_engine', opts.engine)
+  if (opts.model) form.append('parser_model', opts.model)
+  // #region agent log
+  const __dbgStart = Date.now()
+  let __dbgChunks = 0
+  let __dbgEvents = 0
+  const __dbgKeys = files.map((f) => multipartFilenameForPdf(f))
+  fetch('http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '895971' },
+    body: JSON.stringify({
+      sessionId: '895971',
+      location: 'api.ts:parseArticleBatch entry',
+      message: 'client_fetch_start',
+      data: {
+        fileCount: files.length,
+        engine: opts.engine ?? null,
+        model: opts.model ?? null,
+        firstKey: __dbgKeys[0] ?? null,
+        firstKeyBytes: __dbgKeys[0] ? new TextEncoder().encode(__dbgKeys[0]).length : 0,
+      },
+      timestamp: Date.now(),
+      hypothesisId: 'H1-H2',
+      runId: 'upload-sse-debug',
+    }),
+  }).catch(() => {})
+  // #endregion
   return fetch('/api/articles/batch', {
     method: 'POST',
     body: form,
   }).then(async (res) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '895971' },
+      body: JSON.stringify({
+        sessionId: '895971',
+        location: 'api.ts:parseArticleBatch response',
+        message: 'client_fetch_response',
+        data: {
+          status: res.status,
+          ok: res.ok,
+          contentType: res.headers.get('content-type'),
+          transferEncoding: res.headers.get('transfer-encoding'),
+          hasBody: Boolean(res.body),
+          msSinceStart: Date.now() - __dbgStart,
+        },
+        timestamp: Date.now(),
+        hypothesisId: 'H1',
+        runId: 'upload-sse-debug',
+      }),
+    }).catch(() => {})
+    // #endregion
     if (!res.ok) throw new Error(res.statusText)
     const reader = res.body!.getReader()
     const decoder = new TextDecoder()
@@ -221,26 +298,123 @@ export function parseArticleBatch(
       if (payload === '[DONE]') return
       try {
         const data = JSON.parse(payload) as BatchProgressEvent
+        // #region agent log
+        __dbgEvents += 1
+        fetch('http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '895971' },
+          body: JSON.stringify({
+            sessionId: '895971',
+            location: 'api.ts:parseArticleBatch event',
+            message: 'client_sse_event',
+            data: {
+              eventIndex: __dbgEvents,
+              chunkIndex: __dbgChunks,
+              msSinceStart: Date.now() - __dbgStart,
+              event: data.event,
+              filename: data.filename ?? null,
+              filenameMatchesInitialKey: data.filename ? __dbgKeys.includes(data.filename) : null,
+              status: data.status ?? null,
+              current: data.current ?? null,
+              total: data.total ?? null,
+            },
+            timestamp: Date.now(),
+            hypothesisId: 'H1-H2',
+            runId: 'upload-sse-debug',
+          }),
+        }).catch(() => {})
+        // #endregion
         onProgress(data)
-      } catch {
-        /* ignore */
+      } catch (err) {
+        // #region agent log
+        fetch('http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '895971' },
+          body: JSON.stringify({
+            sessionId: '895971',
+            location: 'api.ts:parseArticleBatch parse-error',
+            message: 'client_sse_parse_error',
+            data: { lineLen: line.length, first80: line.slice(0, 80), err: String(err) },
+            timestamp: Date.now(),
+            hypothesisId: 'H4',
+            runId: 'upload-sse-debug',
+          }),
+        }).catch(() => {})
+        // #endregion
       }
     }
-    while (true) {
-      const { done, value } = await reader.read()
-      if (value) buf += decoder.decode(value, { stream: true })
-      if (done) {
-        for (const line of buf.split('\n')) {
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (value) {
+          buf += decoder.decode(value, { stream: true })
+          // #region agent log
+          __dbgChunks += 1
+          fetch('http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '895971' },
+            body: JSON.stringify({
+              sessionId: '895971',
+              location: 'api.ts:parseArticleBatch chunk',
+              message: 'client_sse_chunk',
+              data: {
+                chunkIndex: __dbgChunks,
+                msSinceStart: Date.now() - __dbgStart,
+                valueBytes: value.byteLength,
+                bufLen: buf.length,
+              },
+              timestamp: Date.now(),
+              hypothesisId: 'H1',
+              runId: 'upload-sse-debug',
+            }),
+          }).catch(() => {})
+          // #endregion
+        }
+        if (done) {
+          for (const line of buf.split('\n')) {
+            if (line.length) processLine(line)
+          }
+          break
+        }
+        const lines = buf.split('\n')
+        buf = lines.pop() ?? ''
+        for (const line of lines) {
           if (line.length) processLine(line)
         }
-        break
       }
-      const lines = buf.split('\n')
-      buf = lines.pop() ?? ''
-      for (const line of lines) {
-        if (line.length) processLine(line)
-      }
+    } catch (err) {
+      // #region agent log
+      fetch('http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '895971' },
+        body: JSON.stringify({
+          sessionId: '895971',
+          location: 'api.ts:parseArticleBatch reader-error',
+          message: 'client_sse_reader_error',
+          data: { chunks: __dbgChunks, events: __dbgEvents, msSinceStart: Date.now() - __dbgStart, err: String(err) },
+          timestamp: Date.now(),
+          hypothesisId: 'H3',
+          runId: 'upload-sse-debug',
+        }),
+      }).catch(() => {})
+      // #endregion
+      throw err
     }
+    // #region agent log
+    fetch('http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '895971' },
+      body: JSON.stringify({
+        sessionId: '895971',
+        location: 'api.ts:parseArticleBatch exit',
+        message: 'client_fetch_end',
+        data: { chunks: __dbgChunks, events: __dbgEvents, msSinceStart: Date.now() - __dbgStart },
+        timestamp: Date.now(),
+        hypothesisId: 'H1-H3',
+        runId: 'upload-sse-debug',
+      }),
+    }).catch(() => {})
+    // #endregion
   })
 }
 
@@ -339,6 +513,29 @@ export const getGrobidStatus = () =>
 
 export const startGrobid = () =>
   api.post<{ ok: boolean; alive?: boolean; mode?: string; message?: string; error?: string }>('/grobid/start').then((r) => r.data)
+
+// ----- OpenDataLoader PDF -----
+export const getOpendataloaderStatus = () =>
+  api
+    .get<{
+      javaOk: boolean
+      javaMajor: number
+      javaDetail?: string
+      hybridEnabled: boolean
+      hybridUrl: string
+      hybridAlive: boolean
+    }>('/opendataloader/status')
+    .then((r) => r.data)
+
+export const startOpendataloaderHybrid = () =>
+  api.post<{ ok: boolean; message?: string }>('/opendataloader/start-hybrid').then((r) => r.data)
+
+// ----- Ollama -----
+export const getOllamaStatus = () =>
+  api.get<{ alive: boolean; url: string }>('/ollama/status').then((r) => r.data)
+
+export const getOllamaModels = () =>
+  api.get<{ models: string[] }>('/ollama/tags').then((r) => r.data)
 
 // ----- Legacy stubs (for unused hooks/pages) -----
 export const getPapers = (params?: Record<string, unknown>) =>

@@ -12,8 +12,20 @@ export const TASK2_DEPTH_INSTRUCTIONS: Record<string, string> = {
     "**Depth: one line per section.** For each section, output exactly one clear sentence capturing the main point. No bullet lists unless the section is trivial.",
   five_line:
     "**Depth: about five lines per section.** For each section, write a short paragraph (roughly 4–6 sentences) covering purpose, method, key result, and limitation if visible.",
-  detailed:
-    "**Depth: detailed.** For each section, write a full paragraph (or two if needed) covering main ideas, methods, results, and conclusions. Be comprehensive but concise.",
+  detailed: `**Depth: detailed — strictly section-by-section.**
+
+**Hard requirements**
+- Emit one \`## <section number>. <Section name>\` heading **for every \`<section>\` in the provided XML**, in the order they appear. Do **not** merge, skip, or rename sections; copy the section \`name\` verbatim (trim whitespace only).
+- Under each section heading, write **a thorough multi-paragraph treatment** (2–4 paragraphs, ~150–300 words) grounded only in that section's text. Do **not** summarize the whole paper inside one section and leave the rest thin.
+- For each section, cover in order: (1) purpose and role of the section in the paper, (2) key claims, methods, and definitions introduced here, (3) data, equations, or evidence presented, (4) results/findings as reported, (5) limitations or open questions the authors acknowledge.
+- When subsections (\`<section>\` within a \`<section>\`, or numbered sub-headings in the text) are present, nest them as \`### <sub-number>. <sub-name>\` with their own paragraphs, still in document order.
+- If a section is empty or only contains a figure/table reference, say so explicitly (\`*No substantive text; this section only references Figure/Table X.*\`) rather than skipping it.
+- End the document with a final \`## Overall synthesis\` heading: 4–6 bullets tying the sections together (contribution, strongest evidence, caveats).
+
+**Style**
+- Prefer dense academic paragraphs over bullet lists inside each section. Bullets are only acceptable in the final Overall synthesis block or for genuinely enumerated content (algorithms, hypotheses).
+- Quote short distinctive phrases sparingly (\`"..."\`) when terminology matters; otherwise paraphrase.
+- Ground every statement in that section's XML text. If the section does not contain a piece of information, omit it rather than importing context from other sections.`,
 };
 
 export function getLiteratureSynthesisSystem(detailLevel: 0 | 1 | 2 | 3): string {
@@ -270,11 +282,13 @@ Perform the selected task as follows:
 - Output a JSON object with keys: \`"title"\`, \`"authors"\`, \`"abstract"\`, \`"links"\` (array of objects with \`url\`, \`description\`, \`type\`).
 
 ### **Option 2: Section-by-section summary**
-- Iterate over each \`<section>\` in \`<sections>\`.
+- Iterate over **every** \`<section>\` in \`<sections>\`, in document order. Emit exactly one heading per section — never combine two or more sections under a single heading, and never omit a section.
 - For each section:
-  - **Section name**: From the \`name\` attribute.
-  - **Summary**: Follow the **depth instructions** supplied in the user message for this run (one line, ~five lines, or detailed per section).
-- Output as a Markdown document with headers (e.g., \`## 1. Introduction\`) followed by the summary for each section.
+  - **Heading**: \`## <n>. <Section name>\` where \`<n>\` is the 1-based index in document order and \`<Section name>\` is the \`name\` attribute (trim whitespace only; keep capitalization verbatim).
+  - **Sub-sections**: if a section contains nested \`<section>\` elements or numbered sub-headings in the text, render them as \`### <n.m>. <Sub-name>\` with their own body, still in document order.
+  - **Body**: follow the **depth instructions** supplied in the user message for this run (one line, ~five lines, or detailed per section). At detailed depth, the body MUST be multi-paragraph and cover purpose, methods, evidence, results, and limitations as present in that section.
+- If a section contains no substantive prose (only a figure/table caption, for example), state that explicitly under the heading rather than dropping the section.
+- Output is a single Markdown document: one heading per section in order, followed by its body.
 
 ### **Option 3: Related work synthesizing agent**
 - Identify the section discussing prior work (name like \`"Related Work"\`, \`"Prior Work"\`, or \`"Background"\`).

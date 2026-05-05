@@ -13,6 +13,7 @@ import {
 import { getArticle, getModels, getSettings, runReview } from '@/lib/api'
 import type { ArticleWithReviews } from '@/lib/api'
 import MarkdownContent, { type CitationArticleRef } from '@/components/MarkdownContent'
+import AuthorsDropdown from '@/components/AuthorsDropdown'
 import { pickReviewText, pickReviewTextMediumTask2 } from '@/lib/reviewPick'
 import { extractIntroductionSectionFromTei, extractRelatedWorkSectionFromTei } from '@/lib/teiRelatedWork'
 
@@ -138,7 +139,7 @@ function LlmTaskCard({
             >
               <option value="one_line">1 line / section</option>
               <option value="five_line">~5 lines / section (medium)</option>
-              <option value="detailed">Detailed</option>
+              <option value="detailed">Detailed — multi-paragraph per section</option>
             </select>
           )}
           <button
@@ -371,9 +372,7 @@ export default function ArticlePage() {
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">
           {article.title || 'Untitled'}
         </h1>
-        {authorsList.length > 0 && (
-          <p className="text-[15px] text-slate-600 dark:text-slate-300">{authorsList.join(' · ')}</p>
-        )}
+        {authorsList.length > 0 && <AuthorsDropdown authors={authorsList} />}
         <div className="flex flex-wrap gap-2 text-[12px] text-slate-500 dark:text-slate-400">
           {article.year != null && (
             <span className="font-medium text-slate-600 dark:text-slate-300">Year {article.year}</span>

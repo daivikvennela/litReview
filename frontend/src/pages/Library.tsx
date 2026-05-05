@@ -1,8 +1,50 @@
 import { Fragment, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, ChevronRight, Download, MessageSquare, Sparkles, FileText, BookMarked } from 'lucide-react'
+import { Search, ChevronRight, Download, MessageSquare, Sparkles, FileText, BookMarked, Trash2 } from 'lucide-react'
 import { useArticles } from '@/hooks/useArticles'
-import { downloadArticlesExport, getArticleFolders, type Article } from '@/lib/api'
+import {
+  deleteAllArticles,
+  deleteArticle,
+  downloadArticlesExport,
+  getArticleFolders,
+  type Article,
+} from '@/lib/api'
+
+const PARSER_ENGINE_BADGES: Record<string, { label: string; className: string }> = {
+  opendataloader: {
+    label: 'OpenDataLoader',
+    className:
+      'bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-950/50 dark:text-sky-200 dark:border-sky-800',
+  },
+  grobid: {
+    label: 'GROBID',
+    className:
+      'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700',
+  },
+  openrouter_vlm: {
+    label: 'OpenRouter VLM',
+    className:
+      'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200 dark:bg-fuchsia-950/40 dark:text-fuchsia-300 dark:border-fuchsia-900',
+  },
+  ollama_vlm: {
+    label: 'Ollama VLM',
+    className:
+      'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900',
+  },
+}
+
+function parserBadge(a: Article): { label: string; className: string; title: string } {
+  const engine = (a.parser_engine || '').trim()
+  const meta = PARSER_ENGINE_BADGES[engine]
+  const fallback = {
+    label: engine ? engine.replace(/_/g, ' ') : 'Unknown',
+    className:
+      'bg-white text-slate-500 border-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700',
+  }
+  const base = meta ?? fallback
+  const title = a.model_used ? `${base.label} · ${a.model_used}` : base.label
+  return { ...base, title }
+}
 
 const VENUE_TYPES = ['all', 'journal', 'conference', 'book', 'report', 'preprint', 'unknown'] as const
 
@@ -40,6 +82,7 @@ export default function Library() {
   const [listSort, setListSort] = useState<ListSort>('parsed_at')
   const [folderOptions, setFolderOptions] = useState<string[]>([])
   const [exporting, setExporting] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [chatPick, setChatPick] = useState<Set<string>>(() => new Set())
 
   const yearMinNum = yearMin.trim() === '' ? undefined : Number(yearMin)
@@ -138,6 +181,19 @@ export default function Library() {
           {a.folder?.trim() ? a.folder : '—'}
         </span>
       </td>
+      <td className="px-3 py-3.5 text-[11px] whitespace-nowrap">
+        {(() => {
+          const b = parserBadge(a)
+          return (
+            <span
+              className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10.5px] font-medium ${b.className}`}
+              title={b.title}
+            >
+              {b.label}
+            </span>
+          )
+        })()}
+      </td>
       <td className="px-4 py-3.5 text-[12px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
         {a.parsed_at ? new Date(a.parsed_at).toLocaleDateString() : '—'}
       </td>
@@ -152,6 +208,47 @@ export default function Library() {
     downloadArticlesExport(ids && ids.length > 0 ? ids : undefined)
       .catch(() => {})
       .finally(() => setExporting(false))
+  }
+
+  const handleDelete = async (ids: string[]) => {
+    if (ids.length === 0 || deleting) return
+    const ok = window.confirm(
+      `Delete ${ids.length} article${ids.length !== 1 ? 's' : ''} from your library?\n\nThis removes the parsed TEI/VLM payloads and cached LLM reviews. PDF source files on disk are not affected.`,
+    )
+    if (!ok) return
+    setDeleting(true)
+    try {
+      const results = await Promise.allSettled(ids.map((id) => deleteArticle(id)))
+      const failures = results.filter((r) => r.status === 'rejected').length
+      setChatPick(new Set())
+      await refetch()
+      if (failures > 0) {
+        window.alert(`Deleted ${ids.length - failures} of ${ids.length}. ${failures} failed.`)
+      }
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const handleDeleteEverything = async () => {
+    if (deleting) return
+    const ok = window.confirm(
+      'Delete EVERY article in your library?\n\nThis ignores the current filters and removes every parsed article, all cached LLM reviews, and all parser outputs from the database. PDF source files on disk are not affected.\n\nThis cannot be undone.',
+    )
+    if (!ok) return
+    const ok2 = window.confirm('Really delete every article? Click OK to confirm.')
+    if (!ok2) return
+    setDeleting(true)
+    try {
+      const { removed } = await deleteAllArticles()
+      setChatPick(new Set())
+      await refetch()
+      window.alert(`Removed ${removed} article${removed === 1 ? '' : 's'} from the library.`)
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Failed to delete articles')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   return (
@@ -285,6 +382,16 @@ export default function Library() {
               </button>
               <button
                 type="button"
+                onClick={() => handleDelete(selectedIds)}
+                disabled={deleting}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
+                title="Delete selected articles from your library"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {deleting ? `Deleting ${selectedIds.length}…` : `Delete (${selectedIds.length})`}
+              </button>
+              <button
+                type="button"
                 onClick={() => setChatPick(new Set())}
                 className="text-[12px] text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 px-2"
               >
@@ -334,6 +441,30 @@ export default function Library() {
               >
                 {allVisibleSelected ? 'Deselect all' : 'Select all'}
               </button>
+              <button
+                type="button"
+                disabled={articles.length === 0 || deleting}
+                onClick={() => {
+                  const all = articles.map((a) => a.id)
+                  setChatPick(new Set(all))
+                  handleDelete(all)
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-950/50 disabled:opacity-40"
+                title="Select every visible article and delete them"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete visible
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={handleDeleteEverything}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-40"
+                title="Delete every article in the library (ignores filters)"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {deleting ? 'Deleting…' : 'Delete entire library'}
+              </button>
               <span className="text-[11px] text-slate-400 dark:text-slate-500">
                 {articles.length} shown
                 {listSort === 'folder' ? ' · grouped by folder' : ''}
@@ -349,6 +480,7 @@ export default function Library() {
                   <th className="px-3 py-3 text-left font-semibold w-20">Year</th>
                   <th className="px-3 py-3 text-left font-semibold w-28">Venue</th>
                   <th className="px-3 py-3 text-left font-semibold max-w-[200px]">Folder</th>
+                  <th className="px-3 py-3 text-left font-semibold w-28">Parser</th>
                   <th className="px-4 py-3 text-left font-semibold">Parsed</th>
                   <th className="px-4 py-3 w-10" />
                 </tr>
@@ -359,7 +491,7 @@ export default function Library() {
                       <Fragment key={g.folder || '__root__'}>
                         <tr className="bg-slate-100/90 dark:bg-slate-800/60">
                           <td
-                            colSpan={7}
+                            colSpan={8}
                             className="px-6 py-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300 border-b border-slate-200/60 dark:border-slate-700"
                           >
                             {g.folder ? g.folder : 'Root (no subfolder)'}

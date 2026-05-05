@@ -6,6 +6,7 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { cn } from '@/lib/utils'
 import { getArticle, getReviews, runReview, getSettings, getModels, type ArticleWithReviews, type Review } from '@/lib/api'
 import MarkdownContent from '@/components/MarkdownContent'
+import AuthorsDropdown from '@/components/AuthorsDropdown'
 
 type Tab = 'overview' | 'extracted' | 'task1' | 'task2' | 'task3'
 
@@ -180,13 +181,7 @@ export default function ArticleDrawer({ article, articleId, onClose, onRefetch }
               {authorsParsed.length > 0 && (
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Authors</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {authorsParsed.map((name, i) => (
-                      <span key={i} className="text-[12px] px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
-                        {name}
-                      </span>
-                    ))}
-                  </div>
+                  <AuthorsDropdown authors={authorsParsed} compact />
                 </div>
               )}
               {(article.year != null || article.venue_type || article.venue_name) && (
@@ -530,7 +525,7 @@ function ReviewTab({
           >
             <option value="one_line">1 line / section</option>
             <option value="five_line">~5 lines / section</option>
-            <option value="detailed">Detailed</option>
+            <option value="detailed">Detailed — multi-paragraph per section</option>
           </select>
         )}
         <button

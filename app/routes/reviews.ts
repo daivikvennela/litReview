@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { getArticle, getReview, getReviews, upsertReview } from "../db.js";
+import { getArticle, getLatestParseOutput, getReview, getReviews, upsertReview } from "../db.js";
 import { createOpenRouter } from "../lib/openrouter.js";
 import { getSetting } from "../db.js";
 import { PAPER_REVIEW_SYSTEM, TASK2_DEPTH_INSTRUCTIONS } from "../lib/prompts.js";
@@ -32,9 +32,27 @@ router.post("/:articleId", async (req: Request, res: Response) => {
     taskNum === 2 && typeof depthRaw === "string" && TASK2_DEPTHS.has(depthRaw) ? depthRaw : "";
 
   const article = getArticle(articleId);
-  if (!article || !article.xml) {
-    res.status(404).json({ error: "Article not found or not parsed" });
+  if (!article) {
+    res.status(404).json({ error: "Article not found" });
     return;
+  }
+
+  const tei = article.xml?.trim();
+  let documentBody = "";
+  let documentKind: "tei" | "markdown" | "json" = "tei";
+  if (tei) {
+    documentBody = tei.slice(0, 200_000);
+    documentKind = "tei";
+  } else {
+    const latest = getLatestParseOutput(articleId);
+    const payload = latest?.payload_json?.trim();
+    if (!payload) {
+      res.status(404).json({ error: "Article has no parseable content (no TEI XML or parser output)" });
+      return;
+    }
+    documentBody = payload.slice(0, 200_000);
+    const fmt = (latest?.output_format ?? "").toLowerCase();
+    documentKind = fmt === "json" ? "json" : "markdown";
   }
 
   const apiKey = getSetting("openrouter_api_key") || process.env.OPENROUTER_API_KEY;
@@ -59,7 +77,19 @@ router.post("/:articleId", async (req: Request, res: Response) => {
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
 
-  let userMsg = `Task option: ${taskNum}\n\nPlease process the uploaded XML file using option ${taskNum}: ${TASK_LABELS[taskNum]}.\n\nXML content:\n${article.xml.slice(0, 200000)}`;
+  const label = TASK_LABELS[taskNum];
+  let userMsg = `Task option: ${taskNum}\n\n`;
+  if (documentKind !== "tei") {
+    userMsg +=
+      "The document below was produced by a PDF parser (Markdown or JSON layout), not TEI XML. Apply the same task goals; treat headings and blocks as section boundaries where applicable.\n\n";
+  }
+  if (documentKind === "tei") {
+    userMsg += `Please process the uploaded TEI XML using option ${taskNum}: ${label}.\n\nXML content:\n${documentBody}`;
+  } else if (documentKind === "json") {
+    userMsg += `Please process the structured JSON from the paper parser using option ${taskNum}: ${label}.\n\nDocument JSON:\n${documentBody}`;
+  } else {
+    userMsg += `Please process the Markdown from the paper parser using option ${taskNum}: ${label}.\n\nDocument Markdown:\n${documentBody}`;
+  }
   if (taskNum === 2) {
     const instr = TASK2_DEPTH_INSTRUCTIONS[effectiveDepth] || TASK2_DEPTH_INSTRUCTIONS.detailed;
     userMsg += `\n\n---\n\n${instr}`;

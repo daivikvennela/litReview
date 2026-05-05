@@ -6,7 +6,21 @@
  * text view to back chat/search.
  */
 
-export type ParserEngine = "grobid" | "openrouter_vlm" | "ollama_vlm";
+export type ParserEngine = "opendataloader" | "grobid" | "openrouter_vlm" | "ollama_vlm";
+
+/** Options passed through to @opendataloader/pdf when engine is `opendataloader`. */
+export interface OpenDataLoaderParseOptions {
+  /** e.g. `docling-fast` when hybrid server is running; omit or `off` for local-only. */
+  hybrid?: string;
+  hybridUrl?: string;
+  hybridMode?: string;
+  useStructTree?: boolean;
+  /** When true, pass hybrid to docling-fast and rely on server started with --force-ocr (user responsibility). */
+  forceOcr?: boolean;
+  ocrLang?: string;
+  enrichFormula?: boolean;
+  enrichPictureDescription?: boolean;
+}
 
 export type ParsedOutputFormat = "tei_xml" | "markdown" | "json" | "plain_text";
 
@@ -35,7 +49,7 @@ export interface ParsedOutput {
 }
 
 export interface ParseRequestOptions {
-  /** Which engine to invoke. Defaults to `grobid`. */
+  /** Which engine to invoke. Defaults to app setting `pdf_parser_default_engine` or `opendataloader`. */
   engine?: ParserEngine;
   /** Optional model override for VLM engines. */
   model?: string | null;
@@ -43,4 +57,6 @@ export interface ParseRequestOptions {
   grobidUrl?: string | null;
   /** Maximum PDF pages rendered for VLM engines. */
   maxPages?: number;
+  /** Overrides persisted OpenDataLoader settings for this request. */
+  opendataloader?: OpenDataLoaderParseOptions;
 }

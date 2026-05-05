@@ -38,6 +38,7 @@ router.post("/", upload.single("pdf"), async (req: Request, res: Response) => {
       venue_name: parsed.articleFields.venue_name,
       links_json: parsed.articleFields.links_json,
       folder,
+      parser_engine: parsed.engine,
     });
 
     insertParseOutput({

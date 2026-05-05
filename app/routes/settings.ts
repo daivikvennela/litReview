@@ -11,6 +11,17 @@ const SETTING_KEYS = [
   "default_model_task1",
   "default_model_task2",
   "default_model_task3",
+  "pdf_parser_default_engine",
+  "pdf_parser_openrouter_model",
+  "ollama_url",
+  "pdf_parser_ollama_model",
+  "opendataloader_hybrid_enabled",
+  "opendataloader_hybrid_url",
+  "opendataloader_force_ocr",
+  "opendataloader_ocr_lang",
+  "opendataloader_enrich_formula",
+  "opendataloader_enrich_picture_description",
+  "opendataloader_use_struct_tree",
 ] as const;
 
 router.get("/", (_req: Request, res: Response) => {
