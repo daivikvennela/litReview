@@ -109,13 +109,16 @@ export default function Library() {
   const selectedIds = [...chatPick]
   const allVisibleSelected = articles.length > 0 && articles.every((a) => chatPick.has(a.id))
 
-  const renderArticleRow = (a: Article) => (
+  const renderArticleRow = (a: Article, rowNum: number) => (
     <tr
       key={a.id}
       onClick={() => navigate(`/library/article/${a.id}`)}
       className="hover:bg-blue-50/40 dark:hover:bg-blue-950/20 cursor-pointer transition-colors group"
     >
-      <td className="pl-4 pr-1 py-3.5 w-10 align-top" onClick={(e) => e.stopPropagation()}>
+      <td className="w-10 pl-3 pr-0 py-3.5 text-right tabular-nums text-[12px] text-slate-500 dark:text-slate-400 align-top">
+        {rowNum}
+      </td>
+      <td className="pl-2 pr-1 py-3.5 w-10 align-top" onClick={(e) => e.stopPropagation()}>
         <input
           type="checkbox"
           checked={chatPick.has(a.id)}
@@ -365,12 +368,22 @@ export default function Library() {
               <button
                 type="button"
                 onClick={() => navigate(queryWithGen(selectedIds, 'relatedwork'))}
-                disabled={selectedIds.length < 2 || selectedIds.length > 50}
+                disabled={selectedIds.length < 2 || selectedIds.length > 25}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium bg-fuchsia-600 text-white hover:bg-fuchsia-700 disabled:opacity-50"
-                title="Requires 2-50 selected papers"
+                title="Requires 2-25 selected papers"
               >
                 <BookMarked className="w-3.5 h-3.5" />
                 Compile related works
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(queryWithGen(selectedIds, 'relatedwork_structured'))}
+                disabled={selectedIds.length < 2 || selectedIds.length > 25}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium bg-pink-700 text-white hover:bg-pink-800 disabled:opacity-50"
+                title="Requires 2-25 selected papers"
+              >
+                <BookMarked className="w-3.5 h-3.5" />
+                Structured + BibTeX
               </button>
               <button
                 type="button"
@@ -397,9 +410,9 @@ export default function Library() {
               >
                 Clear selection
               </button>
-              {(selectedIds.length < 2 || selectedIds.length > 50) && (
+              {(selectedIds.length < 2 || selectedIds.length > 25) && (
                 <span className="text-[11px] text-amber-600 dark:text-amber-400">
-                  Compile related works requires 2-50 selected papers.
+                  Related-work actions require 2-25 selected papers.
                 </span>
               )}
             </div>
@@ -473,7 +486,10 @@ export default function Library() {
             <table className="w-full">
               <thead className="bg-slate-50 dark:bg-slate-900 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200/60 dark:border-slate-800">
                 <tr>
-                  <th className="pl-4 pr-1 py-3 w-10 text-left font-semibold" title="Select for batch actions">
+                  <th className="w-10 pl-3 pr-0 py-3 text-right font-semibold text-slate-500 dark:text-slate-400" title="Row number">
+                    #
+                  </th>
+                  <th className="pl-2 pr-1 py-3 w-10 text-left font-semibold" title="Select for batch actions">
                     <span className="sr-only">Select</span>
                   </th>
                   <th className="px-6 py-3 text-left font-semibold">Title</th>
@@ -491,16 +507,16 @@ export default function Library() {
                       <Fragment key={g.folder || '__root__'}>
                         <tr className="bg-slate-100/90 dark:bg-slate-800/60">
                           <td
-                            colSpan={8}
+                            colSpan={9}
                             className="px-6 py-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300 border-b border-slate-200/60 dark:border-slate-700"
                           >
                             {g.folder ? g.folder : 'Root (no subfolder)'}
                           </td>
                         </tr>
-                        {g.items.map((a) => renderArticleRow(a))}
+                        {g.items.map((a, i) => renderArticleRow(a, i + 1))}
                       </Fragment>
                     ))
-                  : articles.map((a) => renderArticleRow(a))}
+                  : articles.map((a, i) => renderArticleRow(a, i + 1))}
               </tbody>
             </table>
           </>

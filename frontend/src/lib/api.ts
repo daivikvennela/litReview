@@ -558,7 +558,12 @@ export const getPaperAbstract = (_paperId: string, _forceRegenerate = false) =>
   Promise.reject(new Error('Use Review panel instead'))
 
 // ----- Chat (streaming) -----
-export type ChatMode = 'lit_review_synthesis' | 'summarize_set' | 'intro_abstract' | 'related_work_compile'
+export type ChatMode =
+  | 'lit_review_synthesis'
+  | 'summarize_set'
+  | 'intro_abstract'
+  | 'related_work_compile'
+  | 'related_work_structured'
 
 export function sendChat(
   message: string,

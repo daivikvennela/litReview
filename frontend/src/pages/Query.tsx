@@ -25,6 +25,8 @@ const INTRO_ABSTRACT_USER_PROMPT = `Draft the Introduction and Abstract sections
 
 const RELATED_WORK_COMPILE_PROMPT = `Write a publication-ready **Related Works** section for a research paper: thematic synthesis across the selected sources, explicit cross-paper comparison (methods, assumptions, datasets/metrics, and where findings agree or conflict), honest uncertainty when excerpts are thin, and dense inline citations in the required Markdown form. Avoid a disconnected list of per-paper abstracts unless the evidence base is extremely small.`
 
+const RELATED_WORK_STRUCTURED_PROMPT = `Produce the structured related-works report exactly as specified in your instructions: per-paper cards (one-line, strengths, weaknesses, critic with citations), then section-by-section thematic synthesis. BibTeX will be appended automatically — do not invent BibTeX entries.`
+
 /** Related-work compile always uses at least detail 2 so prompts match research-grade defaults (other modes unchanged). */
 function effectiveDetailForRelatedWork(level: 0 | 1 | 2 | 3): 0 | 1 | 2 | 3 {
   return Math.max(level, 2) as 0 | 1 | 2 | 3
@@ -212,6 +214,12 @@ export default function Query() {
         mode: 'related_work_compile',
         detailLevel: effectiveDetailForRelatedWork(detailLevel),
       })
+    } else if (gen === 'relatedwork_structured') {
+      sendRef.current(RELATED_WORK_STRUCTURED_PROMPT, {
+        articleIds,
+        mode: 'related_work_structured',
+        detailLevel: effectiveDetailForRelatedWork(detailLevel),
+      })
     }
   }, [articleIds, articleIdsKey, detailLevel, isStreaming, searchParams, setSearchParams])
 
@@ -237,10 +245,19 @@ export default function Query() {
   }
 
   const runRelatedWorkCompile = () => {
-    if (articleIds.length < 2 || articleIds.length > 50 || isStreaming) return
+    if (articleIds.length < 2 || articleIds.length > 25 || isStreaming) return
     sendMessage(RELATED_WORK_COMPILE_PROMPT, {
       articleIds,
       mode: 'related_work_compile',
+      detailLevel: effectiveDetailForRelatedWork(detailLevel),
+    })
+  }
+
+  const runRelatedWorkStructured = () => {
+    if (articleIds.length < 2 || articleIds.length > 25 || isStreaming) return
+    sendMessage(RELATED_WORK_STRUCTURED_PROMPT, {
+      articleIds,
+      mode: 'related_work_structured',
       detailLevel: effectiveDetailForRelatedWork(detailLevel),
     })
   }
@@ -306,12 +323,22 @@ export default function Query() {
                 <button
                   type="button"
                   onClick={runRelatedWorkCompile}
-                  disabled={isStreaming || articleIds.length < 2 || articleIds.length > 50}
+                  disabled={isStreaming || articleIds.length < 2 || articleIds.length > 25}
                   title="Uses minimum detail level 2 (standard) for research-grade synthesis; raise the Detail slider for more depth."
                   className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[12px] font-medium bg-fuchsia-600 text-white hover:bg-fuchsia-700 disabled:opacity-50"
                 >
                   <BookMarked className="w-3.5 h-3.5" />
                   Compile related works
+                </button>
+                <button
+                  type="button"
+                  onClick={runRelatedWorkStructured}
+                  disabled={isStreaming || articleIds.length < 2 || articleIds.length > 25}
+                  title="Per-paper cards, thematic synthesis, plus deterministic BibTeX from library metadata."
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[12px] font-medium bg-pink-700 text-white hover:bg-pink-800 disabled:opacity-50"
+                >
+                  <BookMarked className="w-3.5 h-3.5" />
+                  Structured + BibTeX
                 </button>
                 <div className="inline-flex items-center gap-2 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700">
                   <span className="text-[11px] text-slate-500 dark:text-slate-400">Detail</span>
@@ -359,9 +386,9 @@ export default function Query() {
                 </li>
               ))}
             </ul>
-            {(articleIds.length < 2 || articleIds.length > 50) && (
+            {(articleIds.length < 2 || articleIds.length > 25) && (
               <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">
-                Compiled related works requires selecting between 2 and 50 articles.
+                Related-work modes require selecting between 2 and 25 articles.
               </p>
             )}
           </>

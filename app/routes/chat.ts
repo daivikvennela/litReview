@@ -1,17 +1,21 @@
 import { Router, Request, Response } from "express";
 import { createOpenRouter } from "../lib/openrouter.js";
-import { getSetting } from "../db.js";
+import { getSetting, getArticle, type Article } from "../db.js";
+import { buildBibTeX } from "../lib/bibtex.js";
 import { buildArticleContextSystemBlock } from "../lib/chatArticleContext.js";
 import {
   getIntroAbstractChatSystem,
   getLiteratureSynthesisSystem,
   getRelatedWorkCompileSystem,
+  getRelatedWorkStructuredSystem,
   getSummarizeSetChatSystem,
 } from "../lib/prompts.js";
 import { validateCiteTargets } from "../lib/chatCiteGuard.js";
-import { RELATED_WORK_RETRY_USER_MESSAGE, relatedWorkPassesRigor } from "../lib/relatedWorkQualityGate.js";
+import { relatedWorkPassesRigor } from "../lib/relatedWorkQualityGate.js";
 
 const router = Router();
+
+const RELATED_WORK_MAX_ARTICLES = 25;
 
 router.post("/", async (req: Request, res: Response) => {
   const { message, model, files, system, mode } = req.body;
@@ -29,8 +33,11 @@ router.post("/", async (req: Request, res: Response) => {
     res.status(400).json({ error: "message is required" });
     return;
   }
-  if (mode === "related_work_compile" && (articleIds.length < 2 || articleIds.length > 50)) {
-    res.status(400).json({ error: "Related-work compilation requires selecting between 2 and 50 articles." });
+  const isRelatedWorkMode = mode === "related_work_compile" || mode === "related_work_structured";
+  if (isRelatedWorkMode && (articleIds.length < 2 || articleIds.length > RELATED_WORK_MAX_ARTICLES)) {
+    res.status(400).json({
+      error: `Related-work modes require selecting between 2 and ${RELATED_WORK_MAX_ARTICLES} articles.`,
+    });
     return;
   }
 
@@ -62,7 +69,11 @@ router.post("/", async (req: Request, res: Response) => {
 
   const docBlock = buildArticleContextSystemBlock(
     articleIds,
-    mode === "related_work_compile" ? { mode: "related_work_compile" } : undefined,
+    mode === "related_work_compile"
+      ? { mode: "related_work_compile" }
+      : mode === "related_work_structured"
+        ? { mode: "related_work_structured" }
+        : undefined,
   );
   const systemParts: string[] = [];
   if (mode === "lit_review_synthesis") {
@@ -73,6 +84,8 @@ router.post("/", async (req: Request, res: Response) => {
     systemParts.push(getIntroAbstractChatSystem(detailLevel));
   } else if (mode === "related_work_compile") {
     systemParts.push(getRelatedWorkCompileSystem(detailLevel));
+  } else if (mode === "related_work_structured") {
+    systemParts.push(getRelatedWorkStructuredSystem(detailLevel));
   }
   if (typeof system === "string" && system.trim()) systemParts.push(system.trim());
   if (docBlock) systemParts.push(docBlock);
@@ -87,7 +100,6 @@ router.post("/", async (req: Request, res: Response) => {
   res.setHeader("Connection", "keep-alive");
 
   const allowedCiteIds = new Set(articleIds);
-  const bufferRelatedWorkFirstPass = mode === "related_work_compile" && articleIds.length >= 2;
 
   try {
     const openrouter = createOpenRouter(apiKey);
@@ -104,44 +116,19 @@ router.post("/", async (req: Request, res: Response) => {
       const content = chunk.choices?.[0]?.delta?.content;
       if (content) {
         fullText += content;
-        if (!bufferRelatedWorkFirstPass) {
-          res.write(`data: ${JSON.stringify({ content })}\n\n`);
-        }
+        res.write(`data: ${JSON.stringify({ content })}\n\n`);
       }
       if (chunk.usage) res.write(`data: ${JSON.stringify({ usage: chunk.usage })}\n\n`);
     }
 
-    if (bufferRelatedWorkFirstPass) {
-      if (relatedWorkPassesRigor(fullText, articleIds.length)) {
-        res.write(`data: ${JSON.stringify({ content: fullText })}\n\n`);
-      } else {
-        res.write(
-          `data: ${JSON.stringify({
-            content:
-              "\n\n---\n\n**Regenerating** (first draft below rigor checks: length, structure, or citations). One stricter pass…\n\n",
-          })}\n\n`,
-        );
-        const retryMessages: Array<{ role: string; content: string | typeof contentParts }> = [
-          ...messages,
-          { role: "assistant", content: fullText },
-          { role: "user", content: RELATED_WORK_RETRY_USER_MESSAGE },
-        ];
-        const stream2 = await openrouter.chat.send({
-          chatGenerationParams: {
-            model: selectedModel,
-            messages: retryMessages as unknown as never[],
-            stream: true,
-          },
-        });
-        fullText = "";
-        for await (const chunk of stream2) {
-          const content = chunk.choices?.[0]?.delta?.content;
-          if (content) {
-            fullText += content;
-            res.write(`data: ${JSON.stringify({ content })}\n\n`);
-          }
-          if (chunk.usage) res.write(`data: ${JSON.stringify({ usage: chunk.usage })}\n\n`);
-        }
+    if (mode === "related_work_structured" && articleIds.length >= 2) {
+      const arts = articleIds
+        .map((id) => getArticle(id))
+        .filter((a): a is Article => a != null);
+      if (arts.length > 0) {
+        const bib = buildBibTeX(arts);
+        const bibBlock = `\n\n## BibTeX\n\`\`\`bibtex\n${bib}\n\`\`\`\n`;
+        res.write(`data: ${JSON.stringify({ content: bibBlock })}\n\n`);
       }
     }
 
@@ -150,10 +137,21 @@ router.post("/", async (req: Request, res: Response) => {
       if (!citeCheck.ok) {
         const base = `\n\n[Citation check] Unknown cite target(s): ${citeCheck.invalid.join(", ")}. Use only Internal IDs from the document blocks (copy the exact ID after "Internal ID:").`;
         const extra =
-          mode === "related_work_compile"
-            ? " For Related Works, every paper-specific claim should use `[n](cite:INTERNAL_ID)` with a valid ID from the context."
+          mode === "related_work_compile" || mode === "related_work_structured"
+            ? " For these modes, every paper-specific claim should use `[n](cite:INTERNAL_ID)` with a valid ID from the context."
             : "";
         res.write(`data: ${JSON.stringify({ content: base + extra })}\n\n`);
+      }
+    }
+
+    if (mode === "related_work_compile" && articleIds.length >= 2 && fullText.trim()) {
+      if (!relatedWorkPassesRigor(fullText, articleIds.length)) {
+        res.write(
+          `data: ${JSON.stringify({
+            content:
+              "\n\n_[Rigor warning: this response may be shorter than the heuristic target, may lack clear Markdown structure, or may use too few inline citations. Try **Compile related works** again, or raise the detail level.]_\n",
+          })}\n\n`,
+        );
       }
     }
 

@@ -407,7 +407,7 @@ export default function ArticlePage() {
           <div className="space-y-3">
             <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 px-4 py-3">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                Abstract (extracted)
+                Abstract (summarized)
               </p>
               {article.abstract?.trim() ? (
                 <p className="text-[13px] text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">

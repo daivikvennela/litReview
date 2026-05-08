@@ -192,7 +192,7 @@ export function getRelatedWorkCompileSystem(detailLevel: 0 | 1 | 2 | 3): string 
   if (detailLevel >= 2) {
     return `${ACADEMIC_STYLE_BLOCK}
 
-You are writing a **Related Works** section suitable for a strong conference or journal submission. The user selected **2–50** papers; your job is **thematic synthesis and comparison**, not a catalog of abstracts.
+You are writing a **Related Works** section suitable for a strong conference or journal submission. The user selected **2–25** papers; your job is **thematic synthesis and comparison**, not a catalog of abstracts.
 
 ${RELATED_WORK_RESEARCH_BAR}
 
@@ -220,7 +220,7 @@ ${agendaBlock}
   if (detailLevel === 1) {
     return `${ACADEMIC_STYLE_BLOCK}
 
-You are writing a **Related Works** section across **2–50** selected papers. The output must read as **integrated research synthesis**, not isolated mini-summaries.
+You are writing a **Related Works** section across **2–25** selected papers. The output must read as **integrated research synthesis**, not isolated mini-summaries.
 
 ${RELATED_WORK_RESEARCH_BAR}
 
@@ -241,7 +241,7 @@ ${RELATED_WORK_RESEARCH_BAR}
   }
   return `${ACADEMIC_STYLE_BLOCK}
 
-You are writing a **Related Works** section across **2–50** papers at a **concise** length while still meeting a **research-level** standard: integration, comparison, and honest uncertainty.
+You are writing a **Related Works** section across **2–25** papers at a **concise** length while still meeting a **research-level** standard: integration, comparison, and honest uncertainty.
 
 ${RELATED_WORK_RESEARCH_BAR}
 
@@ -256,6 +256,54 @@ ${RELATED_WORK_RESEARCH_BAR}
 **Citations**
 - Use \`[n](cite:INTERNAL_ID)\` for substantive paper-specific claims; if you must stay brief, still cite the main claims you rely on.
 - Do not cite papers outside the provided context.`;
+}
+
+/** Scoped chat: structured related-work cards + thematic synthesis; BibTeX is appended by the server. */
+export function getRelatedWorkStructuredSystem(detailLevel: 0 | 1 | 2 | 3): string {
+  const depthHint =
+    detailLevel >= 3
+      ? "Use **longer** bullets and paragraphs where evidence supports it; keep claims grounded."
+      : detailLevel >= 2
+        ? "Use substantive bullets (not single words) for strengths/weaknesses/critic."
+        : "Stay compact but complete every required bullet for each paper.";
+
+  return `${ACADEMIC_STYLE_BLOCK}
+
+You produce a **structured related-works report** across **2–25** papers in context. ${depthHint}
+
+${RELATED_WORK_RESEARCH_BAR}
+
+**Output structure (Markdown) — follow exactly**
+
+## Per-paper cards
+For **each** paper in citation-index order (\`Paper [1]\`, \`Paper [2]\`, …), emit:
+
+### [n] <short recognizable title>
+Use the same \`n\` as in **Paper [n]** in the citation index. Title may truncate.
+
+- **One-line:** one sentence on contribution / problem-method-result (grounded in excerpts).
+- **Strengths:** 2–4 bullets.
+- **Weaknesses:** 2–4 bullets (limitations, scope, evaluation gaps — honest).
+- **Critic:** 2–5 sentences of independent assessment (what is convincing vs under-supported); separate from authors' claims.
+
+Every factual statement in these bullets must end with \`[n](cite:INTERNAL_ID)\` using that paper's Internal ID from the document block.
+
+## Section-by-section synthesis
+Integrate across papers (not per-paper blocks). Use these subheadings:
+
+### Problem framing
+### Methods
+### Datasets / metrics
+### Findings
+### Limitations & open questions
+
+Dense comparative prose; frequent \`[n](cite:INTERNAL_ID)\` after substantive claims.
+
+**Important:** Do **not** emit a \`## BibTeX\` section yourself — the application appends verified BibTeX after your answer.
+
+**Citations**
+- Use \`[n](cite:INTERNAL_ID)\` as described in the context block.
+- Do not cite or name papers not present in the context.`;
 }
 
 export const LITERATURE_SYNTHESIS_SYSTEM = getLiteratureSynthesisSystem(0);
