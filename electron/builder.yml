@@ -4,8 +4,14 @@ copyright: Copyright (c) 2026 USC
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 
 directories:
+  app: .
   output: dist-installers
   buildResources: build
+
+# better-sqlite3 lives under extraResources/app — do not let electron-builder
+# treat app/ as the Electron application package (it looks for index.js).
+npmRebuild: false
+nodeGypRebuild: false
 
 icon: build/icon.png
 
@@ -15,8 +21,6 @@ files:
   - package.json
 
 asar: true
-asarUnpack:
-  - "**/node_modules/better-sqlite3/**"
 
 extraResources:
   - from: app
@@ -52,7 +56,6 @@ win:
     - target: nsis
       arch:
         - x64
-        - arm64
 
 nsis:
   oneClick: false

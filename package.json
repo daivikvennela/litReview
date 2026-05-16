@@ -6,6 +6,7 @@
   "main": "dist-electron/main.cjs",
   "author": "USC",
   "license": "MIT",
+  "build": "electron/builder.yml",
   "engines": {
     "node": ">=20"
   },
