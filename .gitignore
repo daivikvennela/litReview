@@ -6,7 +6,6 @@ __pycache__/
 .Python
 *.egg-info/
 dist/
-build/
 *.egg
 .eggs/
 .venv/
@@ -65,6 +64,15 @@ logs/
 
 # macOS app bundle (built artifact)
 *.app/
+
+# Electron installers (generated icon committed optional; CI regenerates)
+build/icon.png
+dist-electron/
+dist-installers/
+app/server.bundle.cjs
+app/server.bundle.cjs.map
+app/server.bundle.mjs
+app/server.bundle.mjs.map
 
 # Test artifacts
 .pytest_cache/

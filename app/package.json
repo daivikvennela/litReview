@@ -1,5 +1,8 @@
 {
   "name": "lit-review-agent",
+  "version": "2.0.0",
+  "description": "Lit Review Agent Express backend",
+  "author": "USC",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,13 +18,13 @@
     "express": "^4.21.0",
     "multer": "^2.1.1",
     "open": "^10.0.0",
+    "tsx": "^4.19.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/multer": "^2.1.0",
     "@types/node": "^22.0.0",
-    "tsx": "^4.19.0",
     "typescript": "^5.4.0"
   }
 }

@@ -2,16 +2,38 @@
   "name": "lit-review-agent-v2",
   "private": true,
   "version": "2.0.0",
-  "description": "Standalone Lit Review Agent — PDF parse (GROBID) + OpenRouter",
+  "description": "Standalone Lit Review Agent — PDF parse + OpenRouter",
+  "main": "dist-electron/main.cjs",
+  "author": "USC",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "concurrently \"npm run dev:app\" \"npm run dev:frontend\"",
     "dev:app": "cd app && npx tsx server.ts",
     "dev:frontend": "cd frontend && npm run dev",
+    "dev:electron": "npm run build:electron && cross-env NODE_ENV=development electron .",
     "build": "cd frontend && npm run build && echo 'Frontend built to app/public'",
+    "build:electron": "npm run build && node scripts/generate-icon.mjs && node scripts/bundle-electron.mjs",
+    "rebuild:app-native": "node scripts/postinstall-rebuild.mjs",
     "start": "cd app && npx tsx server.ts",
+    "postinstall": "electron-builder install-app-deps && node scripts/postinstall-rebuild.mjs",
+    "dist:mac": "npm run build:electron && npm run rebuild:app-native && electron-builder --mac --projectDir . --config electron/builder.yml",
+    "dist:win": "npm run build:electron && npm run rebuild:app-native && electron-builder --win --projectDir . --config electron/builder.yml",
+    "dist:all": "npm run build:electron && npm run rebuild:app-native && electron-builder -mw --projectDir . --config electron/builder.yml",
     "package": "npm run build && echo 'Run app with: cd app && npm run dev'"
   },
   "devDependencies": {
-    "concurrently": "^9.0.0"
+    "@electron/rebuild": "^3.7.1",
+    "@types/node": "^22.0.0",
+    "concurrently": "^9.0.0",
+    "cross-env": "^7.0.3",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "electron-log": "^5.2.4",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.4.0",
+    "wait-on": "^8.0.1"
   }
 }

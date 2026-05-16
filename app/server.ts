@@ -1,8 +1,7 @@
 import dotenv from "dotenv";
 import express from "express";
 import path from "path";
-import { fileURLToPath } from "url";
-import open from "open";
+import { getAppDir } from "./lib/appPaths.js";
 import { getDb } from "./db.js";
 import chatRouter from "./routes/chat.js";
 import parseRouter from "./routes/parse.js";
@@ -15,14 +14,16 @@ import metaRouter from "./routes/meta.js";
 import ollamaRouter from "./routes/ollama.js";
 import opendataloaderRouter from "./routes/opendataloader.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(__dirname, "..");
-dotenv.config({ path: path.join(ROOT, ".env") });
+const APP_DIR = getAppDir();
+const ROOT = path.join(APP_DIR, "..");
+const envPath =
+  process.env.LITREVIEW_ENV_PATH || path.join(ROOT, ".env");
+dotenv.config({ path: envPath });
 
 const app = express();
 app.use(express.json({ limit: "50mb" }));
 
-const publicDir = path.join(__dirname, "public");
+const publicDir = path.join(APP_DIR, "public");
 
 app.use("/api/chat", chatRouter);
 app.use("/api/parse", parseRouter);
@@ -43,12 +44,20 @@ app.get("*", (_req, res) => {
 
 const PORT = Number(process.env.PORT) || 3456;
 
+const HOST = process.env.LITREVIEW_HOST || "127.0.0.1";
+const headless = process.env.LITREVIEW_HEADLESS === "1";
+
 function start() {
   getDb();
-  const server = app.listen(PORT, () => {
-    const url = `http://localhost:${PORT}`;
+  const server = app.listen(PORT, HOST, () => {
+    const url = `http://${HOST}:${PORT}`;
     console.log(`Lit Review Agent running at ${url}`);
-    open(url).catch(() => {});
+    console.log("LITREVIEW_READY");
+    if (!headless) {
+      import("open")
+        .then((m) => m.default(url))
+        .catch(() => {});
+    }
   });
   server.on("error", (err: NodeJS.ErrnoException) => {
     if (err.code === "EADDRINUSE") {

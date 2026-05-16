@@ -2,7 +2,27 @@
 
 Local-first literature review assistant for PDF ingestion, structured parsing, article review generation, and multi-paper chat.
 
-## Quick Start (Copy/Paste)
+## Download (Windows & macOS)
+
+Installers are built with Electron—no Node or git required.
+
+| Platform | Install |
+|----------|---------|
+| **macOS** | Download `Lit Review Agent-*-mac-universal.dmg` from [Releases](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent/releases), open it, drag **Lit Review Agent** to Applications |
+| **Windows** | Download `Lit Review Agent-*-win-x64.exe` (or arm64) from Releases and run the installer |
+
+**First launch**
+
+1. If prompted about **Java**, install [Adoptium JDK 11+](https://adoptium.net/) for the default PDF parser (OpenDataLoader), or continue without Java and use GROBID.
+2. Open **Settings** and set your **OpenRouter API key** (or edit the `.env` file in the app data folder—see [PACKAGING.md](PACKAGING.md)).
+
+**Unsigned builds:** macOS → right-click the app → **Open**. Windows → SmartScreen → **More info** → **Run anyway**.
+
+To build installers yourself, see [PACKAGING.md](PACKAGING.md).
+
+---
+
+## Developer setup
 
 ### 1) Clone and install
 
@@ -62,6 +82,12 @@ Then open:
 - Frontend: `http://localhost:5174`
 - Backend API: `http://localhost:3456`
 
+**Electron dev window:**
+
+```bash
+npm run dev:electron
+```
+
 ## One-Command Run (production style)
 
 ```bash
@@ -80,9 +106,13 @@ This serves the built frontend from the Express server.
 ## Useful commands
 
 ```bash
-npm run dev       # backend + frontend (recommended for local development)
-npm run build     # compile frontend and output to app/public
-npm start         # run express server with built frontend
+npm run dev           # backend + frontend (recommended for local development)
+npm run dev:electron  # Electron shell + embedded server
+npm run build         # compile frontend and output to app/public
+npm run build:electron # bundle for desktop packaging
+npm start             # run express server with built frontend
+npm run dist:mac      # build macOS .dmg (on macOS)
+npm run dist:win      # build Windows .exe (on Windows)
 ```
 
 ## GROBID notes
@@ -98,11 +128,13 @@ npm start         # run express server with built frontend
 - **Docker command not found**: install Docker Desktop (only needed for GROBID).
 - **Port 8070 already in use**: stop the existing service or change `GROBID_URL`.
 - **OpenRouter errors**: verify `OPENROUTER_API_KEY` in `.env` and restart the app.
+- **Desktop app won't open (macOS)**: right-click → Open for unsigned builds.
 
 ## Stack
 
 - `frontend/`: React + Vite + Tailwind
 - `app/`: Express + TypeScript + SQLite (`better-sqlite3`)
+- `electron/`: desktop shell + installers
 - Local DB: `~/.litreview/data.db`
 
 ## License

@@ -1,17 +1,11 @@
 import { appendFileSync } from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import { Router, Request, Response } from "express";
+import { resolveFromApp } from "../lib/appPaths.js";
 import multer from "multer";
 import { createHash } from "crypto";
 
-const __AGENT_DEBUG_LOG = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  ".cursor",
-  "debug-aa59a2.log",
-);
+const __AGENT_DEBUG_LOG = path.join(resolveFromApp(".."), ".cursor", "debug-aa59a2.log");
 import * as XLSX from "xlsx";
 import {
   getArticles,

@@ -10,6 +10,10 @@ import {
 
 const router = Router();
 
+router.get("/health", (_req: Request, res: Response) => {
+  res.json({ ok: true, version: "2.0.0" });
+});
+
 router.get("/database", (_req: Request, res: Response) => {
   try {
     const resolvedPath = getDatabaseFilePath();

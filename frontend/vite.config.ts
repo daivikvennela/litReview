@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => {
   const apiPort = env.PORT || '3456'
 
   return {
+  base: './',
   plugins: [react()],
   resolve: {
     alias: {

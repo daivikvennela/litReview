@@ -2,16 +2,14 @@ import { readFileSync } from "fs";
 import { mkdtemp, readFile, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
-import { fileURLToPath } from "url";
 import { convert } from "@opendataloader/pdf";
+import { resolveFromApp } from "../appPaths.js";
 import type { OpenDataLoaderParseOptions, ParsedArticleFields, ParsedOutput } from "./types.js";
 import { extractFieldsFromVlmMarkdown, markdownToPlainText } from "./vlmShared.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 function odlPackageVersion(): string {
   try {
-    const pkgPath = path.join(__dirname, "../../node_modules/@opendataloader/pdf/package.json");
+    const pkgPath = resolveFromApp("node_modules/@opendataloader/pdf/package.json");
     const j = JSON.parse(readFileSync(pkgPath, "utf8")) as { version?: string };
     return j.version ?? "unknown";
   } catch {

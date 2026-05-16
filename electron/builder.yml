@@ -1,0 +1,65 @@
+appId: edu.usc.litreview
+productName: Lit Review Agent
+copyright: Copyright (c) 2026 USC
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+
+directories:
+  output: dist-installers
+  buildResources: build
+
+icon: build/icon.png
+
+files:
+  - "!**/*"
+  - dist-electron/**/*
+  - package.json
+
+asar: true
+asarUnpack:
+  - "**/node_modules/better-sqlite3/**"
+
+extraResources:
+  - from: app
+    to: app
+    filter:
+      - "**/*"
+      - "!node_modules/.cache/**"
+      - "!**/tsconfig.json"
+      - "!server.bundle.*"
+  - from: .env.example
+    to: app/.env.example
+
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: false
+
+dmg:
+  title: Lit Review Agent ${version}
+  window:
+    width: 540
+    height: 380
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+        - arm64
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  shortcutName: Lit Review Agent
+  uninstallDisplayName: Lit Review Agent
+
+publish: null
