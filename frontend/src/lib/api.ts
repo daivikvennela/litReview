@@ -132,7 +132,10 @@ export const getArticles = (params?: {
 export const getArticleFolders = () =>
   api.get<string[]>('/articles/folders').then((r) => r.data)
 
-export type ArticleMeta = Pick<Article, 'id' | 'title' | 'pdf_path'>
+export type ArticleMeta = Pick<
+  Article,
+  'id' | 'title' | 'pdf_path' | 'abstract' | 'year' | 'venue_type' | 'venue_name'
+>
 
 export const getArticlesMeta = (ids: string[]) => {
   if (ids.length === 0) return Promise.resolve([] as ArticleMeta[])

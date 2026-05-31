@@ -274,16 +274,41 @@ export function getArticle(id: string): Article | null {
 }
 
 /** Lightweight rows for chat scope / citation list (order matches `ids`). */
-export function getArticlesMeta(ids: string[]): Array<{ id: string; title: string | null; pdf_path: string | null }> {
+export function getArticlesMeta(ids: string[]): Array<{
+  id: string
+  title: string | null
+  pdf_path: string | null
+  abstract: string | null
+  year: number | null
+  venue_type: string | null
+  venue_name: string | null
+}> {
   const ordered = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
   if (ordered.length === 0) return [];
   const database = getDb();
   const placeholders = ordered.map(() => "?").join(",");
   const rows = database
-    .prepare(`SELECT id, title, pdf_path FROM articles WHERE id IN (${placeholders})`)
-    .all(...ordered) as Array<{ id: string; title: string | null; pdf_path: string | null }>;
+    .prepare(
+      `SELECT id, title, pdf_path, abstract, year, venue_type, venue_name FROM articles WHERE id IN (${placeholders})`,
+    )
+    .all(...ordered) as Array<{
+    id: string
+    title: string | null
+    pdf_path: string | null
+    abstract: string | null
+    year: number | null
+    venue_type: string | null
+    venue_name: string | null
+  }>;
   const byId = new Map(rows.map((r) => [r.id, r]));
-  return ordered.map((id) => byId.get(id)).filter((r): r is { id: string; title: string | null; pdf_path: string | null } => r != null);
+  return ordered
+    .map((id) => byId.get(id))
+    .filter((r): r is NonNullable<typeof r> => r != null)
+    .map((r) => ({
+      ...r,
+      abstract:
+        r.abstract && r.abstract.length > 300 ? `${r.abstract.slice(0, 297)}…` : r.abstract,
+    }));
 }
 
 export function upsertArticle(article: {

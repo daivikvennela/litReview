@@ -5,6 +5,11 @@ export const ACADEMIC_STYLE_BLOCK = `
 - Prefer short sentences, commas, or semicolons; do not overuse em-dashes for rhetorical effect.
 - Avoid hype ("groundbreaking", "revolutionary"), vague transitions ("Moreover", "It is worth noting" without substance), and filler.
 - State claims at a level supported by the supplied text only.
+
+**Output discipline (mandatory)**
+- Return ONLY the final user-facing document. Never include planning, scratchpad notes, meta-commentary, or internal reasoning.
+- Do not narrate your process ("We need to…", "Let's draft…", "First I will…", "Paper [n] is about…" as analysis before writing).
+- Do not list how you will structure the answer before writing it. Begin directly with the requested headings or prose.
 `.trim();
 
 export const TASK2_DEPTH_INSTRUCTIONS: Record<string, string> = {

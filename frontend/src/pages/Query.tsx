@@ -1,7 +1,6 @@
 import { useRef, useState, useEffect, useMemo } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import {
-  Send,
   StopCircle,
   Trash2,
   MessageSquare,
@@ -15,18 +14,21 @@ import { useAppStore, type ChatMessage } from '@/store'
 import { useStreamQuery } from '@/hooks/useStreamQuery'
 import { cn } from '@/lib/utils'
 import MarkdownContent, { type CitationArticleRef } from '@/components/MarkdownContent'
-import { getArticlesMeta, type ArticleMeta, getSettings } from '@/lib/api'
+import { getArticlesMeta, type ArticleMeta, getSettings, type ChatMode } from '@/lib/api'
 import { DEFAULT_MODEL_ID, getModelDisplayName } from '@/lib/modelCatalog'
-
-const LIT_REVIEW_PROMPT = `Write a literature review synthesis that integrates the selected papers. Organize by themes and contrasts, note gaps and methodological patterns, and ground every claim in the provided texts. Use inline citations in the required Markdown form when attributing specific points to a paper.`
-
-const SUMMARIZE_USER_PROMPT = `Summarize the selected papers using the structure defined in your instructions (cross-paper bullets, then a short paragraph per paper).`
-
-const INTRO_ABSTRACT_USER_PROMPT = `Draft the Introduction and Abstract sections in Markdown as specified in your instructions.`
-
-const RELATED_WORK_COMPILE_PROMPT = `Write a publication-ready **Related Works** section for a research paper: thematic synthesis across the selected sources, explicit cross-paper comparison (methods, assumptions, datasets/metrics, and where findings agree or conflict), honest uncertainty when excerpts are thin, and dense inline citations in the required Markdown form. Avoid a disconnected list of per-paper abstracts unless the evidence base is extremely small.`
-
-const RELATED_WORK_STRUCTURED_PROMPT = `Produce the structured related-works report exactly as specified in your instructions: per-paper cards (one-line, strengths, weaknesses, critic with citations), then section-by-section thematic synthesis. BibTeX will be appended automatically — do not invent BibTeX entries.`
+import PromptInputBar from '@/components/PromptInputBar'
+import {
+  composePrompts,
+  type GeneratedPrompt,
+  type PromptComposeContext,
+} from '@/lib/promptComposer'
+import {
+  INTRO_ABSTRACT_USER_PROMPT,
+  LIT_REVIEW_PROMPT,
+  RELATED_WORK_COMPILE_PROMPT,
+  RELATED_WORK_STRUCTURED_PROMPT,
+  SUMMARIZE_USER_PROMPT,
+} from '@/lib/promptSuggestions'
 
 /** Related-work compile always uses at least detail 2 so prompts match research-grade defaults (other modes unchanged). */
 function effectiveDetailForRelatedWork(level: 0 | 1 | 2 | 3): 0 | 1 | 2 | 3 {
@@ -153,6 +155,8 @@ function MessageBubble({
 export default function Query() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [input, setInput] = useState('')
+  const [pendingMode, setPendingMode] = useState<ChatMode | undefined>()
+  const [acceptedSuggestionText, setAcceptedSuggestionText] = useState<string | null>(null)
   const [scopeMeta, setScopeMeta] = useState<ArticleMeta[]>([])
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
   const [detailLevel, setDetailLevel] = useState<0 | 1 | 2 | 3>(0)
@@ -237,10 +241,48 @@ export default function Query() {
     }
   }, [articleIds, articleIdsKey, detailLevel, isStreaming, searchParams, setSearchParams])
 
+  const promptContext = useMemo(
+    (): PromptComposeContext => ({
+      partialQuery: input,
+      articles: scopeMeta,
+      detailLevel,
+    }),
+    [input, scopeMeta, detailLevel],
+  )
+
+  const popularSuggestions = useMemo(
+    () => composePrompts({ partialQuery: '', articles: scopeMeta, detailLevel }).slice(0, 6),
+    [scopeMeta, detailLevel],
+  )
+
+  const handleInputChange = (next: string) => {
+    setInput(next)
+    if (acceptedSuggestionText != null && next !== acceptedSuggestionText) {
+      setPendingMode(undefined)
+      setAcceptedSuggestionText(null)
+    }
+  }
+
+  const handleAcceptSuggestion = (prompt: GeneratedPrompt) => {
+    setPendingMode(prompt.mode)
+    setAcceptedSuggestionText(prompt.text)
+  }
+
   const handleSend = () => {
     if (!input.trim() || isStreaming) return
-    sendMessage(input.trim(), { articleIds: articleIds.length ? articleIds : undefined, detailLevel })
+    const mode = pendingMode
+    const detail =
+      mode === 'related_work_compile' || mode === 'related_work_structured'
+        ? effectiveDetailForRelatedWork(detailLevel)
+        : detailLevel
+    sendMessage(input.trim(), {
+      articleIds: articleIds.length ? articleIds : undefined,
+      detailLevel: detail,
+      mode,
+    })
     setInput('')
+    setPendingMode(undefined)
+    setAcceptedSuggestionText(null)
   }
 
   const runLitReview = () => {
@@ -435,6 +477,24 @@ export default function Query() {
             <p className="text-[14px] mt-2 text-slate-400 dark:text-slate-500 max-w-md mx-auto">
               Select papers in the Library, then use Summarize, Intro + abstract, or Literature review — or ask your own question.
             </p>
+            {popularSuggestions.length > 0 && (
+              <div className="mt-6 flex flex-wrap justify-center gap-2 max-w-lg mx-auto px-4">
+                {popularSuggestions.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    disabled={isStreaming}
+                    onClick={() => {
+                      handleInputChange(s.text)
+                      handleAcceptSuggestion(s)
+                    }}
+                    className="px-3 py-1.5 rounded-full text-[12px] font-medium border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-blue-300 dark:hover:border-blue-600 hover:text-blue-700 dark:hover:text-blue-300 transition-colors disabled:opacity-50"
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
         {chatHistory.map((msg, i) => (
@@ -452,44 +512,16 @@ export default function Query() {
         <div ref={bottomRef} />
       </div>
 
-      <div className="border-t border-slate-200/60 dark:border-slate-800 bg-white/80 dark:bg-slate-900/90 backdrop-blur-sm p-4">
-        <div className="flex gap-3 max-w-4xl mx-auto">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                handleSend()
-              }
-            }}
-            placeholder="Ask a research question… (Enter to send, Shift+Enter for new line)"
-            rows={2}
-            className="flex-1 resize-none bg-slate-50 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 rounded-xl px-4 py-3 text-[14px] text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
-          />
-          <button
-            onClick={isStreaming ? stop : handleSend}
-            disabled={!isStreaming && !input.trim()}
-            className={cn(
-              'inline-flex items-center justify-center gap-2 min-w-[5.5rem] px-4 py-2 rounded-xl text-white font-medium text-sm transition-all duration-200 self-end shadow-sm',
-              isStreaming
-                ? 'bg-red-500 hover:bg-red-600'
-                : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:shadow-glow disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none',
-            )}
-          >
-            {isStreaming ? (
-              <>
-                <StopCircle className="w-5 h-5" />
-                Stop
-              </>
-            ) : (
-              <>
-                <Send className="w-5 h-5" />
-                Send
-              </>
-            )}
-          </button>
-        </div>
+      <div className="border-t border-slate-200/60 dark:border-slate-800 bg-white/80 dark:bg-slate-900/90 backdrop-blur-sm p-4 overflow-visible relative z-20">
+        <PromptInputBar
+          value={input}
+          onChange={handleInputChange}
+          onAccept={handleAcceptSuggestion}
+          onSubmit={handleSend}
+          onStop={stop}
+          isStreaming={isStreaming}
+          context={promptContext}
+        />
       </div>
     </div>
   )

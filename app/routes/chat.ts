@@ -122,11 +122,10 @@ router.post("/", async (req: Request, res: Response) => {
       if (clientAborted) break;
       const delta = chunk.choices?.[0]?.delta;
       const content = typeof delta?.content === "string" ? delta.content : "";
-      const reasoning = typeof delta?.reasoning === "string" ? delta.reasoning : "";
-      const piece = content + reasoning;
-      if (piece) {
-        fullText += piece;
-        res.write(`data: ${JSON.stringify({ content: piece })}\n\n`);
+      // Never stream delta.reasoning — it is model chain-of-thought, not user-facing output.
+      if (content) {
+        fullText += content;
+        res.write(`data: ${JSON.stringify({ content })}\n\n`);
       }
       if (chunk.usage) res.write(`data: ${JSON.stringify({ usage: chunk.usage })}\n\n`);
     }

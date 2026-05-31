@@ -82,7 +82,8 @@ export function buildArticleContextSystemBlock(articleIds: string[], options?: A
 
   let preamble =
     "The user is asking about ONLY the following research article(s). Ground factual claims in this text only. " +
-    "If something is not stated here, say it is not in the provided document(s). Do not invent citations, numbers, or results.";
+    "If something is not stated here, say it is not in the provided document(s). Do not invent citations, numbers, or results. " +
+    "Output the finished prose only — never include planning notes, paper-by-paper relevance analysis, or meta-commentary about how you will write.";
   if (options?.mode === "related_work_compile") {
     preamble +=
       " Task: produce a publication-quality **Related Works** synthesis across these papers — thematic comparison first; " +
