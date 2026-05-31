@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import path from "path";
 import { homedir } from "os";
 import { mkdirSync, existsSync } from "fs";
+import { DEFAULT_MODEL_ID } from "./lib/modelDefaults.js";
 
 export const LITREVIEW_DIR = path.join(homedir(), ".litreview");
 const DB_PATH = path.join(LITREVIEW_DIR, "data.db");
@@ -82,6 +83,32 @@ function reviewColumnNames(database: Database.Database): Set<string> {
   return new Set(rows.map((r) => r.name));
 }
 
+/** OpenRouter removed endpoints for this id; remap stored settings on load. */
+const DEPRECATED_MODEL_IDS = new Set([
+  "deepseek/deepseek-chat-v3-0324:free",
+  "anthropic/claude-3.5-sonnet",
+  "stepfun/step-3.5-flash:free",
+  "meta-llama/llama-3.3-70b-instruct:free",
+]);
+
+function migrateDeprecatedDefaultModels(database: Database.Database) {
+  for (const key of [
+    "default_model",
+    "default_model_task1",
+    "default_model_task2",
+    "default_model_task3",
+  ]) {
+    const row = database.prepare("SELECT value FROM settings WHERE key = ?").get(key) as
+      | { value: string }
+      | undefined;
+    if (row?.value && DEPRECATED_MODEL_IDS.has(row.value)) {
+      database
+        .prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+        .run(key, DEFAULT_MODEL_ID);
+    }
+  }
+}
+
 /** New installs default to OpenDataLoader; existing DBs keep their stored engine if set. */
 function migrateDefaultParserEngine(database: Database.Database) {
   database.exec(`
@@ -153,6 +180,7 @@ function initSchema(database: Database.Database) {
   migrateArticlesColumns(database);
   migrateReviewsReviewDepth(database);
   migrateDefaultParserEngine(database);
+  migrateDeprecatedDefaultModels(database);
 }
 
 export interface Article {

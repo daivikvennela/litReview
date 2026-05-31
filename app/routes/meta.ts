@@ -7,11 +7,21 @@ import {
   getReviewRowCount,
   getSetting,
 } from "../db.js";
+import { runSystemCheck } from "../lib/systemCheck.js";
 
 const router = Router();
 
 router.get("/health", (_req: Request, res: Response) => {
   res.json({ ok: true, version: "2.0.0" });
+});
+
+router.get("/system-check", async (_req: Request, res: Response) => {
+  try {
+    const result = await runSystemCheck();
+    res.json(result);
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
 });
 
 router.get("/database", (_req: Request, res: Response) => {

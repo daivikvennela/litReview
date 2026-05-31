@@ -3,6 +3,7 @@ import { getArticle, getLatestParseOutput, getReview, getReviews, upsertReview }
 import { createOpenRouter } from "../lib/openrouter.js";
 import { getSetting } from "../db.js";
 import { PAPER_REVIEW_SYSTEM, TASK2_DEPTH_INSTRUCTIONS } from "../lib/prompts.js";
+import { DEFAULT_MODEL_ID } from "../lib/modelDefaults.js";
 
 const TASK_LABELS: Record<number, string> = {
   1: "Extract metadata and links (Option 1)",
@@ -62,7 +63,7 @@ router.post("/:articleId", async (req: Request, res: Response) => {
   }
 
   const modelKey = `default_model_task${taskNum}` as const;
-  const model = modelParam || getSetting(modelKey) || getSetting("default_model") || "openrouter/free";
+  const model = modelParam || getSetting(modelKey) || getSetting("default_model") || DEFAULT_MODEL_ID;
 
   const depthKey = taskNum === 2 ? reviewDepth || "detailed" : "";
   const effectiveDepth = taskNum === 2 ? depthKey : "";

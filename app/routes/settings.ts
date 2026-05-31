@@ -22,6 +22,9 @@ const SETTING_KEYS = [
   "opendataloader_enrich_formula",
   "opendataloader_enrich_picture_description",
   "opendataloader_use_struct_tree",
+  "dots_ocr_url",
+  "chandra_ocr2_url",
+  "ocr_sidecar_timeout_ms",
 ] as const;
 
 router.get("/", (_req: Request, res: Response) => {

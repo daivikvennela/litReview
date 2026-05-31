@@ -12,6 +12,7 @@ import {
 } from "../lib/prompts.js";
 import { validateCiteTargets } from "../lib/chatCiteGuard.js";
 import { relatedWorkPassesRigor } from "../lib/relatedWorkQualityGate.js";
+import { DEFAULT_MODEL_ID } from "../lib/modelDefaults.js";
 
 const router = Router();
 
@@ -47,7 +48,7 @@ router.post("/", async (req: Request, res: Response) => {
     return;
   }
 
-  const selectedModel = model || getSetting("default_model") || "openrouter/free";
+  const selectedModel = model || getSetting("default_model") || DEFAULT_MODEL_ID;
 
   const contentParts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
   if (files && Array.isArray(files) && files.length > 0) {
@@ -99,6 +100,11 @@ router.post("/", async (req: Request, res: Response) => {
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
 
+  let clientAborted = false;
+  res.on("close", () => {
+    if (!res.writableFinished) clientAborted = true;
+  });
+
   const allowedCiteIds = new Set(articleIds);
 
   try {
@@ -113,12 +119,33 @@ router.post("/", async (req: Request, res: Response) => {
 
     let fullText = "";
     for await (const chunk of stream) {
-      const content = chunk.choices?.[0]?.delta?.content;
-      if (content) {
-        fullText += content;
-        res.write(`data: ${JSON.stringify({ content })}\n\n`);
+      if (clientAborted) break;
+      const delta = chunk.choices?.[0]?.delta;
+      const content = typeof delta?.content === "string" ? delta.content : "";
+      const reasoning = typeof delta?.reasoning === "string" ? delta.reasoning : "";
+      const piece = content + reasoning;
+      if (piece) {
+        fullText += piece;
+        res.write(`data: ${JSON.stringify({ content: piece })}\n\n`);
       }
       if (chunk.usage) res.write(`data: ${JSON.stringify({ usage: chunk.usage })}\n\n`);
+    }
+
+    if (clientAborted) {
+      res.end();
+      return;
+    }
+
+    if (!fullText.trim()) {
+      res.write(
+        `data: ${JSON.stringify({
+          error:
+            "Model returned no text (empty stream). Try another model in Settings, or wait if free models are rate-limited.",
+        })}\n\n`,
+      );
+      res.write("data: [DONE]\n\n");
+      res.end();
+      return;
     }
 
     if (mode === "related_work_structured" && articleIds.length >= 2) {
@@ -158,7 +185,13 @@ router.post("/", async (req: Request, res: Response) => {
     res.write("data: [DONE]\n\n");
     res.end();
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "OpenRouter error";
+    let msg = err instanceof Error ? err.message : "OpenRouter error";
+    const extra = err && typeof err === "object" && "body" in err ? (err as { body?: unknown }).body : null;
+    if (extra && typeof extra === "object" && extra !== null && "error" in extra) {
+      const oe = (extra as { error?: { message?: string; metadata?: { raw?: string } } }).error;
+      if (oe?.metadata?.raw) msg = oe.metadata.raw;
+      else if (oe?.message) msg = oe.message;
+    }
     res.write(`data: ${JSON.stringify({ error: msg })}\n\n`);
     res.end();
   }

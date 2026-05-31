@@ -10,6 +10,13 @@ import {
   OLLAMA_VLM_DEFAULT_MODEL,
   parseWithOllamaVlm,
 } from "./ollamaVlmParser.js";
+import { parseWithDotsOcr } from "./dotsOcrParser.js";
+import { parseWithChandraOcr2 } from "./chandraOcr2Parser.js";
+import {
+  CHANDRA_OCR2_DEFAULT_URL,
+  DOTS_OCR_DEFAULT_URL,
+  OCR_SIDECAR_DEFAULT_TIMEOUT_MS,
+} from "./ocrSidecarClient.js";
 import type { OpenDataLoaderParseOptions, ParseRequestOptions, ParsedOutput, ParserEngine } from "./types.js";
 
 export type { OpenDataLoaderParseOptions, ParsedOutput, ParserEngine, ParseRequestOptions } from "./types.js";
@@ -17,9 +24,26 @@ export {
   OPENROUTER_VLM_DEFAULT_MODEL,
   OLLAMA_DEFAULT_URL,
   OLLAMA_VLM_DEFAULT_MODEL,
+  DOTS_OCR_DEFAULT_URL,
+  CHANDRA_OCR2_DEFAULT_URL,
+  OCR_SIDECAR_DEFAULT_TIMEOUT_MS,
 };
 
-const VALID_ENGINES: ParserEngine[] = ["opendataloader", "grobid", "openrouter_vlm", "ollama_vlm"];
+const VALID_ENGINES: ParserEngine[] = [
+  "opendataloader",
+  "grobid",
+  "openrouter_vlm",
+  "ollama_vlm",
+  "dots_ocr",
+  "chandra_ocr2",
+];
+
+function sidecarTimeoutMs(): number | undefined {
+  const raw = getSetting("ocr_sidecar_timeout_ms");
+  if (!raw) return undefined;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
 
 function parseBoolSetting(key: string, defaultValue: boolean): boolean {
   const v = getSetting(key);
@@ -90,6 +114,14 @@ export async function parsePdfWithEngine(
       const baseUrl = getSetting("ollama_url") || process.env.OLLAMA_URL || OLLAMA_DEFAULT_URL;
       const model = options.model ?? getSetting("pdf_parser_ollama_model") ?? OLLAMA_VLM_DEFAULT_MODEL;
       return parseWithOllamaVlm(pdfBuffer, { baseUrl, model, maxPages: options.maxPages });
+    }
+    case "dots_ocr": {
+      const baseUrl = getSetting("dots_ocr_url") ?? DOTS_OCR_DEFAULT_URL;
+      return parseWithDotsOcr(pdfBuffer, filename, baseUrl, sidecarTimeoutMs());
+    }
+    case "chandra_ocr2": {
+      const baseUrl = getSetting("chandra_ocr2_url") ?? CHANDRA_OCR2_DEFAULT_URL;
+      return parseWithChandraOcr2(pdfBuffer, filename, baseUrl, sidecarTimeoutMs());
     }
     default: {
       throw new Error(`Unknown parser engine: ${engine}`);

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { getArticle, getModels, getSettings, runReview } from '@/lib/api'
 import type { ArticleWithReviews } from '@/lib/api'
+import { DEFAULT_MODEL_ID } from '@/lib/modelCatalog'
 import MarkdownContent, { type CitationArticleRef } from '@/components/MarkdownContent'
 import AuthorsDropdown from '@/components/AuthorsDropdown'
 import { pickReviewText, pickReviewTextMediumTask2 } from '@/lib/reviewPick'
@@ -193,9 +194,9 @@ export default function ArticlePage() {
 
   const [models, setModels] = useState<Array<{ id: string }>>([])
   const [defaultModels, setDefaultModels] = useState({
-    task1: 'openrouter/free',
-    task2: 'openrouter/free',
-    task3: 'openrouter/free',
+    task1: DEFAULT_MODEL_ID,
+    task2: DEFAULT_MODEL_ID,
+    task3: DEFAULT_MODEL_ID,
   })
   const [selectedModel, setSelectedModel] = useState<Partial<Record<1 | 2 | 3, string>>>({})
   const [task2Depth, setTask2Depth] = useState<Task2Depth>('five_line')
@@ -205,9 +206,9 @@ export default function ArticlePage() {
   const loadModelsAndDefaults = useCallback(() => {
     getSettings().then((s) => {
       setDefaultModels({
-        task1: s.default_model_task1 || s.default_model || 'openrouter/free',
-        task2: s.default_model_task2 || s.default_model || 'openrouter/free',
-        task3: s.default_model_task3 || s.default_model || 'openrouter/free',
+        task1: s.default_model_task1 || s.default_model || DEFAULT_MODEL_ID,
+        task2: s.default_model_task2 || s.default_model || DEFAULT_MODEL_ID,
+        task3: s.default_model_task3 || s.default_model || DEFAULT_MODEL_ID,
       })
     })
     getModels()
@@ -270,7 +271,7 @@ export default function ArticlePage() {
     (task: 1 | 2 | 3) => {
       if (!id || !article) return
       const model =
-        selectedModel[task] || defaultModels[`task${task}` as 'task1' | 'task2' | 'task3'] || 'openrouter/free'
+        selectedModel[task] || defaultModels[`task${task}` as 'task1' | 'task2' | 'task3'] || DEFAULT_MODEL_ID
       const key = streamKey(task, task2Depth)
       setGenLoading(task)
       setGenStream((s) => ({ ...s, [key]: '' }))

@@ -6,7 +6,13 @@
  * text view to back chat/search.
  */
 
-export type ParserEngine = "opendataloader" | "grobid" | "openrouter_vlm" | "ollama_vlm";
+export type ParserEngine =
+  | "opendataloader"
+  | "grobid"
+  | "openrouter_vlm"
+  | "ollama_vlm"
+  | "dots_ocr"
+  | "chandra_ocr2";
 
 /** Options passed through to @opendataloader/pdf when engine is `opendataloader`. */
 export interface OpenDataLoaderParseOptions {

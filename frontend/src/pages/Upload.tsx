@@ -8,13 +8,22 @@ import {
   multipartFilenameForPdf,
 } from '@/lib/pdfUploadHelpers'
 
-const PARSER_ENGINE_ORDER: ParserEngine[] = ['opendataloader', 'grobid', 'openrouter_vlm', 'ollama_vlm']
+const PARSER_ENGINE_ORDER: ParserEngine[] = [
+  'opendataloader',
+  'grobid',
+  'openrouter_vlm',
+  'ollama_vlm',
+  'dots_ocr',
+  'chandra_ocr2',
+]
 
 const PARSER_ENGINE_LABELS: Record<ParserEngine, string> = {
   opendataloader: 'OpenDataLoader (default)',
   grobid: 'GROBID (TEI XML)',
   openrouter_vlm: 'OpenRouter Vision LM',
   ollama_vlm: 'Local Ollama Vision LM',
+  dots_ocr: 'Dots OCR',
+  chandra_ocr2: 'Chandra OCR 2',
 }
 
 const PARSER_ENGINE_HINTS: Record<ParserEngine, string> = {
@@ -23,6 +32,10 @@ const PARSER_ENGINE_HINTS: Record<ParserEngine, string> = {
   grobid: 'Deterministic structured parse to TEI XML. Requires GROBID running.',
   openrouter_vlm: 'Sends rasterized PDF pages to a hosted vision LM. Requires OpenRouter API key + pdftoppm (Poppler).',
   ollama_vlm: 'Sends rasterized PDF pages to a local Ollama VLM (e.g. qwen2.5vl:7b). Requires Ollama + pdftoppm (Poppler).',
+  dots_ocr:
+    'Multilingual layout OCR via local sidecar (vLLM + dots.ocr). Best for scanned PDFs and complex layouts.',
+  chandra_ocr2:
+    '90+ language OCR via local sidecar (vLLM + chandra-ocr-2). Strong on tables, math, handwriting.',
 }
 
 type FileStatus = 'pending' | 'parsing' | 'done' | 'error'
@@ -91,33 +104,11 @@ export default function Upload() {
   }
 
   const setFileStatusByKey = (key: string, status: FileStatus, error?: string, cached?: boolean) => {
-    setFiles((prev) => {
-      const matched = prev.some((item) => item.key === key)
-      // #region agent log
-      fetch('http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '895971' },
-        body: JSON.stringify({
-          sessionId: '895971',
-          location: 'Upload.tsx:setFileStatusByKey',
-          message: 'client_set_status',
-          data: {
-            key,
-            status,
-            matched,
-            keyBytes: new TextEncoder().encode(key).length,
-            firstKnownKeys: prev.slice(0, 4).map((p) => p.key),
-          },
-          timestamp: Date.now(),
-          hypothesisId: 'H2-H5',
-          runId: 'upload-sse-debug',
-        }),
-      }).catch(() => {})
-      // #endregion
-      return prev.map((item) =>
+    setFiles((prev) =>
+      prev.map((item) =>
         item.key === key ? { ...item, status, error, cached: cached ?? item.cached } : item,
-      )
-    })
+      ),
+    )
   }
 
   const parseAll = async () => {
@@ -131,25 +122,6 @@ export default function Upload() {
     )
     setParsing(true)
     setBatchProgress({ current: 0, total: capped.length })
-    // #region agent log
-    fetch('http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '895971' },
-      body: JSON.stringify({
-        sessionId: '895971',
-        location: 'Upload.tsx:parseAll entry',
-        message: 'client_parse_all_start',
-        data: {
-          cappedCount: capped.length,
-          engine,
-          firstKeys: capped.slice(0, 4).map((f) => f.key),
-        },
-        timestamp: Date.now(),
-        hypothesisId: 'H2',
-        runId: 'upload-sse-debug',
-      }),
-    }).catch(() => {})
-    // #endregion
     try {
       await parseArticleBatch(
         capped.map((f) => f.file),
@@ -178,23 +150,6 @@ export default function Upload() {
         },
       )
       refetch()
-    } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '895971' },
-        body: JSON.stringify({
-          sessionId: '895971',
-          location: 'Upload.tsx:parseAll catch',
-          message: 'client_parse_all_error',
-          data: { err: String(err) },
-          timestamp: Date.now(),
-          hypothesisId: 'H3',
-          runId: 'upload-sse-debug',
-        }),
-      }).catch(() => {})
-      // #endregion
-      throw err
     } finally {
       setParsing(false)
     }

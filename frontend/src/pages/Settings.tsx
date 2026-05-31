@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Settings as SettingsIcon, Key, Server, Cpu, Play, FileSearch, Layers } from 'lucide-react'
+import { Settings as SettingsIcon, Key, Server, Cpu, Play, FileSearch, Layers, BarChart3 } from 'lucide-react'
 import {
   getSettings,
   updateSettings,
@@ -10,14 +10,21 @@ import {
   getOllamaModels,
   getOpendataloaderStatus,
   startOpendataloaderHybrid,
+  getDotsOcrStatus,
+  getChandraOcrStatus,
 } from '@/lib/api'
 import type { Settings, ParserEngine } from '@/lib/api'
+import ModelBenchmarks from '@/components/ModelBenchmarks'
+import SystemCheck from '@/components/SystemCheck'
+import { DEFAULT_MODEL_ID, CATALOG_MODEL_IDS } from '@/lib/modelCatalog'
 
 const PARSER_ENGINE_OPTIONS: Array<{ value: ParserEngine; label: string }> = [
   { value: 'opendataloader', label: 'OpenDataLoader (default, #1 in benchmarks)' },
   { value: 'grobid', label: 'GROBID (TEI XML)' },
   { value: 'openrouter_vlm', label: 'OpenRouter Vision LM' },
   { value: 'ollama_vlm', label: 'Local Ollama Vision LM' },
+  { value: 'dots_ocr', label: 'Dots OCR (local sidecar)' },
+  { value: 'chandra_ocr2', label: 'Chandra OCR 2 (local sidecar)' },
 ]
 
 const OPENROUTER_VLM_SUGGESTIONS = [
@@ -41,6 +48,8 @@ export default function Settings() {
   const [odlHybridAlive, setOdlHybridAlive] = useState<boolean | null>(null)
   const [odlJavaDetail, setOdlJavaDetail] = useState('')
   const [odlStartMessage, setOdlStartMessage] = useState<string | null>(null)
+  const [dotsAlive, setDotsAlive] = useState<boolean | null>(null)
+  const [chandraAlive, setChandraAlive] = useState<boolean | null>(null)
 
   useEffect(() => {
     getSettings().then((s) => {
@@ -50,6 +59,9 @@ export default function Settings() {
         opendataloader_hybrid_url: s.opendataloader_hybrid_url ?? 'http://localhost:5002',
         opendataloader_ocr_lang: s.opendataloader_ocr_lang ?? 'en',
         opendataloader_use_struct_tree: s.opendataloader_use_struct_tree ?? 'true',
+        dots_ocr_url: s.dots_ocr_url ?? 'http://127.0.0.1:8001',
+        chandra_ocr2_url: s.chandra_ocr2_url ?? 'http://127.0.0.1:8002',
+        ocr_sidecar_timeout_ms: s.ocr_sidecar_timeout_ms ?? '120000',
       })
       if (s.openrouter_api_key && !s.openrouter_api_key.endsWith('****')) {
         setApiKeyValue(s.openrouter_api_key)
@@ -59,6 +71,36 @@ export default function Settings() {
       const list = (r as { data?: Array<{ id: string; name?: string }> })?.data ?? []
       setModels(Array.isArray(list) ? list : [])
     }).catch(() => setModels([]))
+  }, [])
+
+  // Curated catalog ids first, then the live OpenRouter list (deduped) so the
+  // popular models are always selectable even if the live fetch fails.
+  const modelOptions = (() => {
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const id of CATALOG_MODEL_IDS) {
+      if (!seen.has(id)) {
+        seen.add(id)
+        out.push(id)
+      }
+    }
+    for (const m of models.slice(0, 80)) {
+      if (!seen.has(m.id)) {
+        seen.add(m.id)
+        out.push(m.id)
+      }
+    }
+    return out
+  })()
+
+  useEffect(() => {
+    const refresh = () => {
+      getDotsOcrStatus().then((r) => setDotsAlive(r.alive)).catch(() => setDotsAlive(false))
+      getChandraOcrStatus().then((r) => setChandraAlive(r.alive)).catch(() => setChandraAlive(false))
+    }
+    refresh()
+    const t = setInterval(refresh, 15000)
+    return () => clearInterval(t)
   }, [])
 
   useEffect(() => {
@@ -172,6 +214,8 @@ export default function Settings() {
       </div>
 
       <div className="space-y-6">
+        <SystemCheck />
+
         <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-card border border-slate-100 dark:border-slate-800">
           <h2 className="flex items-center gap-2 text-[15px] font-semibold text-slate-800 dark:text-slate-100 mb-4">
             <Key className="w-4 h-4" /> OpenRouter API Key
@@ -391,59 +435,134 @@ export default function Settings() {
 
         <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-card border border-slate-100 dark:border-slate-800">
           <h2 className="flex items-center gap-2 text-[15px] font-semibold text-slate-800 dark:text-slate-100 mb-4">
+            <Layers className="w-4 h-4" /> OCR sidecars
+          </h2>
+          <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">
+            Local HTTP services for Dots OCR and Chandra OCR 2. Requires GPU + vLLM; see{' '}
+            <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">scripts/ocr-sidecars/README.md</code>.
+          </p>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-300 mb-1.5">
+                Dots OCR URL
+              </label>
+              <div className="flex items-center gap-3 flex-wrap">
+                <input
+                  type="text"
+                  value={settings.dots_ocr_url ?? ''}
+                  onChange={(e) => setSettings((s) => ({ ...s, dots_ocr_url: e.target.value }))}
+                  placeholder="http://127.0.0.1:8001"
+                  className="flex-1 min-w-[200px] px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-xl text-[13px] bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`w-2.5 h-2.5 rounded-full ${dotsAlive === true ? 'bg-emerald-500' : dotsAlive === false ? 'bg-red-500' : 'bg-slate-300'}`}
+                  />
+                  <span className="text-[12px] text-slate-500">
+                    {dotsAlive === true ? 'Connected' : dotsAlive === false ? 'Offline' : 'Checking…'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-300 mb-1.5">
+                Chandra OCR 2 URL
+              </label>
+              <div className="flex items-center gap-3 flex-wrap">
+                <input
+                  type="text"
+                  value={settings.chandra_ocr2_url ?? ''}
+                  onChange={(e) => setSettings((s) => ({ ...s, chandra_ocr2_url: e.target.value }))}
+                  placeholder="http://127.0.0.1:8002"
+                  className="flex-1 min-w-[200px] px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-xl text-[13px] bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`w-2.5 h-2.5 rounded-full ${chandraAlive === true ? 'bg-emerald-500' : chandraAlive === false ? 'bg-red-500' : 'bg-slate-300'}`}
+                  />
+                  <span className="text-[12px] text-slate-500">
+                    {chandraAlive === true ? 'Connected' : chandraAlive === false ? 'Offline' : 'Checking…'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-300 mb-1.5">
+                Parse timeout (ms)
+              </label>
+              <input
+                type="number"
+                min={10000}
+                step={1000}
+                value={settings.ocr_sidecar_timeout_ms ?? '120000'}
+                onChange={(e) => setSettings((s) => ({ ...s, ocr_sidecar_timeout_ms: e.target.value }))}
+                className="w-full max-w-[200px] px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-xl text-[13px] bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-card border border-slate-100 dark:border-slate-800">
+          <h2 className="flex items-center gap-2 text-[15px] font-semibold text-slate-800 dark:text-slate-100 mb-4">
+            <BarChart3 className="w-4 h-4" /> Models &amp; Benchmarks
+          </h2>
+          <ModelBenchmarks
+            selectedId={settings.default_model ?? DEFAULT_MODEL_ID}
+            onSelect={(id) => setSettings((s) => ({ ...s, default_model: id }))}
+          />
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-card border border-slate-100 dark:border-slate-800">
+          <h2 className="flex items-center gap-2 text-[15px] font-semibold text-slate-800 dark:text-slate-100 mb-4">
             <Cpu className="w-4 h-4" /> Default models
           </h2>
           <div className="space-y-3">
             <label className="block">
               <span className="text-[12px] text-slate-500 block mb-1">Default (chat)</span>
               <select
-                value={settings.default_model ?? 'openrouter/free'}
+                value={settings.default_model ?? DEFAULT_MODEL_ID}
                 onChange={(e) => setSettings((s) => ({ ...s, default_model: e.target.value }))}
                 className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-xl text-[13px] bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               >
-                {models.slice(0, 80).map((m) => (
-                  <option key={m.id} value={m.id}>{m.id}</option>
+                {modelOptions.map((id) => (
+                  <option key={id} value={id}>{id}</option>
                 ))}
-                {models.length === 0 && <option value="openrouter/free">openrouter/free</option>}
               </select>
             </label>
             <label className="block">
               <span className="text-[12px] text-slate-500 block mb-1">Task 1 (Metadata & links)</span>
               <select
-                value={settings.default_model_task1 ?? settings.default_model ?? 'openrouter/free'}
+                value={settings.default_model_task1 ?? settings.default_model ?? DEFAULT_MODEL_ID}
                 onChange={(e) => setSettings((s) => ({ ...s, default_model_task1: e.target.value }))}
                 className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-xl text-[13px] bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               >
-                {models.slice(0, 80).map((m) => (
-                  <option key={m.id} value={m.id}>{m.id}</option>
+                {modelOptions.map((id) => (
+                  <option key={id} value={id}>{id}</option>
                 ))}
-                {models.length === 0 && <option value="openrouter/free">openrouter/free</option>}
               </select>
             </label>
             <label className="block">
               <span className="text-[12px] text-slate-500 block mb-1">Task 2 (Section summary)</span>
               <select
-                value={settings.default_model_task2 ?? settings.default_model ?? 'openrouter/free'}
+                value={settings.default_model_task2 ?? settings.default_model ?? DEFAULT_MODEL_ID}
                 onChange={(e) => setSettings((s) => ({ ...s, default_model_task2: e.target.value }))}
                 className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-xl text-[13px] bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               >
-                {models.slice(0, 80).map((m) => (
-                  <option key={m.id} value={m.id}>{m.id}</option>
+                {modelOptions.map((id) => (
+                  <option key={id} value={id}>{id}</option>
                 ))}
-                {models.length === 0 && <option value="openrouter/free">openrouter/free</option>}
               </select>
             </label>
             <label className="block">
               <span className="text-[12px] text-slate-500 block mb-1">Task 3 (Related work)</span>
               <select
-                value={settings.default_model_task3 ?? settings.default_model ?? 'openrouter/free'}
+                value={settings.default_model_task3 ?? settings.default_model ?? DEFAULT_MODEL_ID}
                 onChange={(e) => setSettings((s) => ({ ...s, default_model_task3: e.target.value }))}
                 className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-xl text-[13px] bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               >
-                {models.slice(0, 80).map((m) => (
-                  <option key={m.id} value={m.id}>{m.id}</option>
+                {modelOptions.map((id) => (
+                  <option key={id} value={id}>{id}</option>
                 ))}
-                {models.length === 0 && <option value="openrouter/free">openrouter/free</option>}
               </select>
             </label>
           </div>

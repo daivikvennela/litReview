@@ -5,6 +5,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { cn } from '@/lib/utils'
 import { getArticle, getReviews, runReview, getSettings, getModels, type ArticleWithReviews, type Review } from '@/lib/api'
+import { DEFAULT_MODEL_ID } from '@/lib/modelCatalog'
 import MarkdownContent from '@/components/MarkdownContent'
 import AuthorsDropdown from '@/components/AuthorsDropdown'
 
@@ -42,9 +43,9 @@ export default function ArticleDrawer({ article, articleId, onClose, onRefetch }
   const loadModels = () => {
     getSettings().then((s) => {
       setDefaultModels({
-        task1: s.default_model_task1 || s.default_model || 'openrouter/free',
-        task2: s.default_model_task2 || s.default_model || 'openrouter/free',
-        task3: s.default_model_task3 || s.default_model || 'openrouter/free',
+        task1: s.default_model_task1 || s.default_model || DEFAULT_MODEL_ID,
+        task2: s.default_model_task2 || s.default_model || DEFAULT_MODEL_ID,
+        task3: s.default_model_task3 || s.default_model || DEFAULT_MODEL_ID,
       })
     })
     getModels().then((r) => {
@@ -97,7 +98,7 @@ export default function ArticleDrawer({ article, articleId, onClose, onRefetch }
   }
 
   const handleGenerate = (task: 1 | 2 | 3) => {
-    const model = selectedModel[task] || defaultModels[`task${task}`] || 'openrouter/free'
+    const model = selectedModel[task] || defaultModels[`task${task}`] || DEFAULT_MODEL_ID
     const key = streamKey(task, task2Depth)
     setLoadingTask(task)
     setStreaming((s) => ({ ...s, [key]: '' }))

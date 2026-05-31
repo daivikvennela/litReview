@@ -3,6 +3,7 @@ import {
   BookOpen,
   Database,
   FileText,
+  KeyRound,
   LayoutDashboard,
   MessageSquare,
   Moon,
@@ -19,6 +20,7 @@ import Query from '@/pages/Query'
 import UploadPage from '@/pages/Upload'
 import SettingsPage from '@/pages/Settings'
 import MetadataPage from '@/pages/Metadata'
+import ApiKeyGuide from '@/pages/ApiKeyGuide'
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -26,6 +28,7 @@ const NAV = [
   { to: '/upload', label: 'Upload', icon: Upload },
   { to: '/query', label: 'Chat', icon: MessageSquare },
   { to: '/metadata', label: 'Metadata', icon: Database },
+  { to: '/api-key', label: 'Get API Key', icon: KeyRound },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
@@ -130,6 +133,7 @@ export default function App() {
           <Route path="/upload" element={<UploadPage />} />
           <Route path="/query" element={<Query />} />
           <Route path="/metadata" element={<MetadataPage />} />
+          <Route path="/api-key" element={<ApiKeyGuide />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </Layout>

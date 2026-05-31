@@ -31,6 +31,16 @@ const PARSER_ENGINE_BADGES: Record<string, { label: string; className: string }>
     className:
       'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900',
   },
+  dots_ocr: {
+    label: 'Dots OCR',
+    className:
+      'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900',
+  },
+  chandra_ocr2: {
+    label: 'Chandra OCR 2',
+    className:
+      'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900',
+  },
 }
 
 function parserBadge(a: Article): { label: string; className: string; title: string } {

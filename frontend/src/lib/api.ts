@@ -41,7 +41,13 @@ export interface Review {
   created_at: string
 }
 
-export type ParserEngine = 'opendataloader' | 'grobid' | 'openrouter_vlm' | 'ollama_vlm'
+export type ParserEngine =
+  | 'opendataloader'
+  | 'grobid'
+  | 'openrouter_vlm'
+  | 'ollama_vlm'
+  | 'dots_ocr'
+  | 'chandra_ocr2'
 
 export interface Settings {
   openrouter_api_key?: string
@@ -62,6 +68,9 @@ export interface Settings {
   opendataloader_enrich_formula?: string
   opendataloader_enrich_picture_description?: string
   opendataloader_use_struct_tree?: string
+  dots_ocr_url?: string
+  chandra_ocr2_url?: string
+  ocr_sidecar_timeout_ms?: string
 }
 
 // ----- Legacy types (for gradual migration) -----
@@ -163,6 +172,28 @@ function isDatabaseInfo(d: unknown): d is DatabaseInfo {
   )
 }
 
+export type CheckStatus = 'ok' | 'warn' | 'fail'
+export type CheckCategory = 'core' | 'parsing' | 'optional'
+
+export interface SystemCheckItem {
+  id: string
+  label: string
+  category: CheckCategory
+  status: CheckStatus
+  detail: string
+  hint?: string
+}
+
+export interface SystemCheckResult {
+  ranAt: string
+  durationMs: number
+  summary: { ok: number; warn: number; fail: number; total: number }
+  checks: SystemCheckItem[]
+}
+
+export const runSystemCheck = () =>
+  api.get<SystemCheckResult>('/meta/system-check').then((r) => r.data)
+
 export const getDatabaseInfo = () =>
   api.get<DatabaseInfo>('/meta/database').then((r) => {
     const d = r.data as unknown
@@ -237,57 +268,10 @@ export function parseArticleBatch(
   files.forEach((f) => form.append('pdfs', f, multipartFilenameForPdf(f)))
   if (opts.engine) form.append('parser_engine', opts.engine)
   if (opts.model) form.append('parser_model', opts.model)
-  // #region agent log
-  const __dbgStart = Date.now()
-  let __dbgChunks = 0
-  let __dbgEvents = 0
-  const __dbgKeys = files.map((f) => multipartFilenameForPdf(f))
-  fetch('http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '895971' },
-    body: JSON.stringify({
-      sessionId: '895971',
-      location: 'api.ts:parseArticleBatch entry',
-      message: 'client_fetch_start',
-      data: {
-        fileCount: files.length,
-        engine: opts.engine ?? null,
-        model: opts.model ?? null,
-        firstKey: __dbgKeys[0] ?? null,
-        firstKeyBytes: __dbgKeys[0] ? new TextEncoder().encode(__dbgKeys[0]).length : 0,
-      },
-      timestamp: Date.now(),
-      hypothesisId: 'H1-H2',
-      runId: 'upload-sse-debug',
-    }),
-  }).catch(() => {})
-  // #endregion
   return fetch('/api/articles/batch', {
     method: 'POST',
     body: form,
   }).then(async (res) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '895971' },
-      body: JSON.stringify({
-        sessionId: '895971',
-        location: 'api.ts:parseArticleBatch response',
-        message: 'client_fetch_response',
-        data: {
-          status: res.status,
-          ok: res.ok,
-          contentType: res.headers.get('content-type'),
-          transferEncoding: res.headers.get('transfer-encoding'),
-          hasBody: Boolean(res.body),
-          msSinceStart: Date.now() - __dbgStart,
-        },
-        timestamp: Date.now(),
-        hypothesisId: 'H1',
-        runId: 'upload-sse-debug',
-      }),
-    }).catch(() => {})
-    // #endregion
     if (!res.ok) throw new Error(res.statusText)
     const reader = res.body!.getReader()
     const decoder = new TextDecoder()
@@ -298,123 +282,26 @@ export function parseArticleBatch(
       if (payload === '[DONE]') return
       try {
         const data = JSON.parse(payload) as BatchProgressEvent
-        // #region agent log
-        __dbgEvents += 1
-        fetch('http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '895971' },
-          body: JSON.stringify({
-            sessionId: '895971',
-            location: 'api.ts:parseArticleBatch event',
-            message: 'client_sse_event',
-            data: {
-              eventIndex: __dbgEvents,
-              chunkIndex: __dbgChunks,
-              msSinceStart: Date.now() - __dbgStart,
-              event: data.event,
-              filename: data.filename ?? null,
-              filenameMatchesInitialKey: data.filename ? __dbgKeys.includes(data.filename) : null,
-              status: data.status ?? null,
-              current: data.current ?? null,
-              total: data.total ?? null,
-            },
-            timestamp: Date.now(),
-            hypothesisId: 'H1-H2',
-            runId: 'upload-sse-debug',
-          }),
-        }).catch(() => {})
-        // #endregion
         onProgress(data)
-      } catch (err) {
-        // #region agent log
-        fetch('http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '895971' },
-          body: JSON.stringify({
-            sessionId: '895971',
-            location: 'api.ts:parseArticleBatch parse-error',
-            message: 'client_sse_parse_error',
-            data: { lineLen: line.length, first80: line.slice(0, 80), err: String(err) },
-            timestamp: Date.now(),
-            hypothesisId: 'H4',
-            runId: 'upload-sse-debug',
-          }),
-        }).catch(() => {})
-        // #endregion
+      } catch {
+        /* ignore malformed chunk */
       }
     }
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (value) {
-          buf += decoder.decode(value, { stream: true })
-          // #region agent log
-          __dbgChunks += 1
-          fetch('http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '895971' },
-            body: JSON.stringify({
-              sessionId: '895971',
-              location: 'api.ts:parseArticleBatch chunk',
-              message: 'client_sse_chunk',
-              data: {
-                chunkIndex: __dbgChunks,
-                msSinceStart: Date.now() - __dbgStart,
-                valueBytes: value.byteLength,
-                bufLen: buf.length,
-              },
-              timestamp: Date.now(),
-              hypothesisId: 'H1',
-              runId: 'upload-sse-debug',
-            }),
-          }).catch(() => {})
-          // #endregion
-        }
-        if (done) {
-          for (const line of buf.split('\n')) {
-            if (line.length) processLine(line)
-          }
-          break
-        }
-        const lines = buf.split('\n')
-        buf = lines.pop() ?? ''
-        for (const line of lines) {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (value) buf += decoder.decode(value, { stream: true })
+      if (done) {
+        for (const line of buf.split('\n')) {
           if (line.length) processLine(line)
         }
+        break
       }
-    } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '895971' },
-        body: JSON.stringify({
-          sessionId: '895971',
-          location: 'api.ts:parseArticleBatch reader-error',
-          message: 'client_sse_reader_error',
-          data: { chunks: __dbgChunks, events: __dbgEvents, msSinceStart: Date.now() - __dbgStart, err: String(err) },
-          timestamp: Date.now(),
-          hypothesisId: 'H3',
-          runId: 'upload-sse-debug',
-        }),
-      }).catch(() => {})
-      // #endregion
-      throw err
+      const lines = buf.split('\n')
+      buf = lines.pop() ?? ''
+      for (const line of lines) {
+        if (line.length) processLine(line)
+      }
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '895971' },
-      body: JSON.stringify({
-        sessionId: '895971',
-        location: 'api.ts:parseArticleBatch exit',
-        message: 'client_fetch_end',
-        data: { chunks: __dbgChunks, events: __dbgEvents, msSinceStart: Date.now() - __dbgStart },
-        timestamp: Date.now(),
-        hypothesisId: 'H1-H3',
-        runId: 'upload-sse-debug',
-      }),
-    }).catch(() => {})
-    // #endregion
   })
 }
 
@@ -514,6 +401,13 @@ export const getGrobidStatus = () =>
 export const startGrobid = () =>
   api.post<{ ok: boolean; alive?: boolean; mode?: string; message?: string; error?: string }>('/grobid/start').then((r) => r.data)
 
+// ----- OCR sidecars (Dots + Chandra) -----
+export const getDotsOcrStatus = () =>
+  api.get<{ alive: boolean; url: string }>('/ocr/dots/status').then((r) => r.data)
+
+export const getChandraOcrStatus = () =>
+  api.get<{ alive: boolean; url: string }>('/ocr/chandra/status').then((r) => r.data)
+
 // ----- OpenDataLoader PDF -----
 export const getOpendataloaderStatus = () =>
   api
@@ -574,6 +468,7 @@ export function sendChat(
     mode?: ChatMode
     detailLevel?: 0 | 1 | 2 | 3
     files?: Array<{ name: string; type: string; text?: string; data?: string }>
+    signal?: AbortSignal
   },
   onChunk: (content: string) => void,
   onUsage?: (usage: Record<string, unknown>) => void,
@@ -582,6 +477,7 @@ export function sendChat(
   return fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    signal: options.signal,
     body: JSON.stringify({
       message,
       model: options.model,
@@ -615,7 +511,13 @@ export function sendChat(
       }
     }
     function read(): Promise<void> {
+      if (options.signal?.aborted) {
+        return reader.cancel().catch(() => {})
+      }
       return reader.read().then(({ done, value }) => {
+        if (options.signal?.aborted) {
+          return reader.cancel().catch(() => {})
+        }
         if (value) buf += decoder.decode(value, { stream: true })
         if (done) {
           for (const line of buf.split('\n')) {

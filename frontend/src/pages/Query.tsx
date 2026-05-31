@@ -15,7 +15,8 @@ import { useAppStore, type ChatMessage } from '@/store'
 import { useStreamQuery } from '@/hooks/useStreamQuery'
 import { cn } from '@/lib/utils'
 import MarkdownContent, { type CitationArticleRef } from '@/components/MarkdownContent'
-import { getArticlesMeta, type ArticleMeta } from '@/lib/api'
+import { getArticlesMeta, type ArticleMeta, getSettings } from '@/lib/api'
+import { DEFAULT_MODEL_ID, getModelDisplayName } from '@/lib/modelCatalog'
 
 const LIT_REVIEW_PROMPT = `Write a literature review synthesis that integrates the selected papers. Organize by themes and contrasts, note gaps and methodological patterns, and ground every claim in the provided texts. Use inline citations in the required Markdown form when attributing specific points to a paper.`
 
@@ -155,6 +156,8 @@ export default function Query() {
   const [scopeMeta, setScopeMeta] = useState<ArticleMeta[]>([])
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
   const [detailLevel, setDetailLevel] = useState<0 | 1 | 2 | 3>(0)
+  const [activeModelId, setActiveModelId] = useState(DEFAULT_MODEL_ID)
+  const modelDisplayName = getModelDisplayName(activeModelId)
   const detailLabel =
     detailLevel === 0 ? '0 concise' : detailLevel === 1 ? '1 standard' : detailLevel === 2 ? '2 detailed' : '3 very detailed'
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -173,6 +176,17 @@ export default function Query() {
   }, [searchParams])
 
   const articleIdsKey = articleIds.join(',')
+
+  useEffect(() => {
+    const refresh = () => {
+      getSettings()
+        .then((s) => setActiveModelId(s.default_model ?? DEFAULT_MODEL_ID))
+        .catch(() => {})
+    }
+    refresh()
+    window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
+  }, [])
 
   useEffect(() => {
     if (articleIds.length === 0) {
@@ -282,9 +296,15 @@ export default function Query() {
     <div className="flex flex-col h-screen">
       <div className="border-b border-slate-200/60 dark:border-slate-800 bg-white/80 dark:bg-slate-900/90 backdrop-blur-sm px-6 py-3 sticky top-0 z-10">
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <h1 className="text-lg font-bold text-slate-800 dark:text-slate-100 tracking-tight flex items-center gap-2">
+          <h1 className="text-lg font-bold text-slate-800 dark:text-slate-100 tracking-tight flex items-center gap-2 flex-wrap">
             <Sparkles className="w-4 h-4 text-blue-500" />
             AI Query
+            <span
+              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-normal bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-500 text-white shadow-sm shadow-purple-500/25"
+              title={activeModelId}
+            >
+              {modelDisplayName}
+            </span>
           </h1>
           <div className="flex items-center gap-2 flex-wrap text-sm">
             {articleIds.length > 0 && (
@@ -362,6 +382,16 @@ export default function Query() {
                   Clear scope
                 </button>
               </>
+            )}
+            {isStreaming && (
+              <button
+                type="button"
+                onClick={stop}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[12px] font-medium bg-red-500 text-white hover:bg-red-600 transition-colors"
+              >
+                <StopCircle className="w-3.5 h-3.5" />
+                Stop
+              </button>
             )}
             <button
               onClick={clearChat}
@@ -441,13 +471,23 @@ export default function Query() {
             onClick={isStreaming ? stop : handleSend}
             disabled={!isStreaming && !input.trim()}
             className={cn(
-              'px-4 py-2 rounded-xl text-white font-medium text-sm transition-all duration-200 self-end shadow-sm',
+              'inline-flex items-center justify-center gap-2 min-w-[5.5rem] px-4 py-2 rounded-xl text-white font-medium text-sm transition-all duration-200 self-end shadow-sm',
               isStreaming
                 ? 'bg-red-500 hover:bg-red-600'
                 : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:shadow-glow disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none',
             )}
           >
-            {isStreaming ? <StopCircle className="w-5 h-5" /> : <Send className="w-5 h-5" />}
+            {isStreaming ? (
+              <>
+                <StopCircle className="w-5 h-5" />
+                Stop
+              </>
+            ) : (
+              <>
+                <Send className="w-5 h-5" />
+                Send
+              </>
+            )}
           </button>
         </div>
       </div>

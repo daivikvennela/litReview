@@ -1,11 +1,6 @@
-import { appendFileSync } from "fs";
-import path from "path";
 import { Router, Request, Response } from "express";
-import { resolveFromApp } from "../lib/appPaths.js";
 import multer from "multer";
 import { createHash } from "crypto";
-
-const __AGENT_DEBUG_LOG = path.join(resolveFromApp(".."), ".cursor", "debug-aa59a2.log");
 import * as XLSX from "xlsx";
 import {
   getArticles,
@@ -171,45 +166,6 @@ router.get("/", (req: Request, res: Response) => {
     include_xml,
   });
 
-  // #region agent log
-  {
-    const engines = list.reduce<Record<string, number>>((acc, a) => {
-      const e = (a.parser_engine ?? "").trim() || "_null";
-      acc[e] = (acc[e] ?? 0) + 1;
-      return acc;
-    }, {});
-    const sample = list.slice(0, 8).map((a) => ({ id: a.id.slice(0, 12), pe: a.parser_engine ?? null }));
-    let primaryCompare: { id: string; articlePe: string | null; latestPe: string | null } | null = null;
-    if (list[0]) {
-      const latest = getLatestParseOutput(list[0].id);
-      primaryCompare = {
-        id: list[0].id.slice(0, 12),
-        articlePe: list[0].parser_engine ?? null,
-        latestPe: latest?.parser_engine ?? null,
-      };
-    }
-    const payload = {
-      sessionId: "aa59a2",
-      location: "articles.ts:GET/",
-      message: "list_parser_engine_distribution",
-      data: { engines, sample, n: list.length, includeReviews, primaryCompare },
-      timestamp: Date.now(),
-      hypothesisId: "H1-H2-H3",
-      runId: "post-fix-library-badge",
-    };
-    fetch("http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "aa59a2" },
-      body: JSON.stringify(payload),
-    }).catch(() => {});
-    try {
-      appendFileSync(__AGENT_DEBUG_LOG, `${JSON.stringify(payload)}\n`);
-    } catch {
-      /* ignore */
-    }
-  }
-  // #endregion
-
   if (!includeReviews || list.length === 0) {
     res.json(list);
     return;
@@ -298,60 +254,8 @@ router.post("/batch", upload.array("pdfs", 200), async (req: Request, res: Respo
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
 
-  // #region agent log
-  const __dbgBatchStart = Date.now();
-  let __dbgSendCount = 0;
-  fetch("http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "895971" },
-    body: JSON.stringify({
-      sessionId: "895971",
-      location: "articles.ts:POST/batch entry",
-      message: "batch_entry",
-      data: {
-        fileCount: files.length,
-        engine,
-        parserModel: parserModel ?? null,
-        firstFilename: files[0]?.originalname ?? null,
-        firstFilenameBytes: files[0]?.originalname ? Buffer.from(files[0].originalname, "utf8").length : 0,
-        firstFilenameCodepoints: files[0]?.originalname
-          ? Array.from(files[0].originalname).slice(0, 40).map((c) => c.codePointAt(0))
-          : [],
-        acceptEncoding: req.headers["accept-encoding"] ?? null,
-      },
-      timestamp: Date.now(),
-      hypothesisId: "H1-H2",
-      runId: "upload-sse-debug",
-    }),
-  }).catch(() => {});
-  // #endregion
-
   const send = (event: string, data: Record<string, unknown>) => {
     res.write(`data: ${JSON.stringify({ event, ...data })}\n\n`);
-    // #region agent log
-    __dbgSendCount += 1;
-    fetch("http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "895971" },
-      body: JSON.stringify({
-        sessionId: "895971",
-        location: "articles.ts:send()",
-        message: "sse_write",
-        data: {
-          event,
-          sendIndex: __dbgSendCount,
-          msSinceStart: Date.now() - __dbgBatchStart,
-          filename: (data as { filename?: unknown }).filename ?? null,
-          status: (data as { status?: unknown }).status ?? null,
-          current: (data as { current?: unknown }).current ?? null,
-          total: (data as { total?: unknown }).total ?? null,
-        },
-        timestamp: Date.now(),
-        hypothesisId: "H1",
-        runId: "upload-sse-debug",
-      }),
-    }).catch(() => {});
-    // #endregion
   };
 
   send("start", { total: files.length, engine });
@@ -388,6 +292,30 @@ router.post("/batch", upload.array("pdfs", 200), async (req: Request, res: Respo
         continue;
       }
       if (existing?.parser_engine === engine && engine === "opendataloader") {
+        const latest = getLatestParseOutput(id);
+        if (latest?.payload_json) {
+          upsertArticle({
+            id,
+            pdf_path: file.originalname,
+            parsed_at: new Date().toISOString(),
+            folder: folderFromPdfPath(file.originalname),
+            parser_engine: engine,
+          });
+          send("progress", {
+            current: i + 1,
+            total: files.length,
+            filename: file.originalname,
+            status: "done",
+            cached: true,
+            engine,
+          });
+          continue;
+        }
+      }
+      if (
+        existing?.parser_engine === engine &&
+        (engine === "dots_ocr" || engine === "chandra_ocr2")
+      ) {
         const latest = getLatestParseOutput(id);
         if (latest?.payload_json) {
           upsertArticle({
@@ -466,26 +394,6 @@ router.post("/batch", upload.array("pdfs", 200), async (req: Request, res: Respo
 
   send("done", {});
   res.end();
-
-  // #region agent log
-  fetch("http://127.0.0.1:7850/ingest/0daa5dfd-1e0b-4c66-8efc-7b58e0540940", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "895971" },
-    body: JSON.stringify({
-      sessionId: "895971",
-      location: "articles.ts:POST/batch exit",
-      message: "batch_end",
-      data: {
-        totalMs: Date.now() - __dbgBatchStart,
-        sendCount: __dbgSendCount,
-        fileCount: files.length,
-      },
-      timestamp: Date.now(),
-      hypothesisId: "H1",
-      runId: "upload-sse-debug",
-    }),
-  }).catch(() => {});
-  // #endregion
 });
 
 export default router;

@@ -13,6 +13,7 @@ import modelsRouter from "./routes/models.js";
 import metaRouter from "./routes/meta.js";
 import ollamaRouter from "./routes/ollama.js";
 import opendataloaderRouter from "./routes/opendataloader.js";
+import ocrSidecarsRouter from "./routes/ocrSidecars.js";
 
 const APP_DIR = getAppDir();
 const ROOT = path.join(APP_DIR, "..");
@@ -35,6 +36,7 @@ app.use("/api/models", modelsRouter);
 app.use("/api/meta", metaRouter);
 app.use("/api/ollama", ollamaRouter);
 app.use("/api/opendataloader", opendataloaderRouter);
+app.use("/api/ocr", ocrSidecarsRouter);
 
 app.use(express.static(publicDir));
 

@@ -56,6 +56,18 @@ The installer does **not** bundle a JRE. On first launch, if `java` is not on `P
 
 GROBID is not embedded. Users run it via Docker or point **Settings → GROBID URL** at a hosted instance.
 
+## OCR sidecars (Dots OCR + Chandra OCR 2)
+
+These parsers are **not** bundled in the installer. Users with a GPU run local sidecar services and point **Settings → OCR sidecars** at their URLs (defaults: Dots `http://127.0.0.1:8001`, Chandra `http://127.0.0.1:8002`).
+
+Setup steps live in [scripts/ocr-sidecars/README.md](scripts/ocr-sidecars/README.md):
+
+1. Install upstream stacks (dots.ocr / chandra-ocr) and start **vLLM**
+2. Start the sidecar HTTP layer: `python scripts/ocr-sidecars/dots_server.py` and/or `chandra_server.py`
+3. Select **Dots OCR** or **Chandra OCR 2** on the Upload page
+
+Sidecars require Python 3.10+, FastAPI, and significant GPU VRAM for the underlying models.
+
 ## Code signing (optional)
 
 Set these secrets in GitHub Actions (or locally) for signed installers:

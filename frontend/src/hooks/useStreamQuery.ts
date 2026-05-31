@@ -11,13 +11,17 @@ export type StreamQueryOptions = {
 
 export function useStreamQuery() {
   const [isStreaming, setIsStreaming] = useState(false)
-  const abortRef = useRef<boolean>(false)
+  const abortControllerRef = useRef<AbortController | null>(null)
   const { addMessage, updateLastAssistant } = useAppStore()
 
   const sendMessage = (question: string, opts?: StreamQueryOptions) => {
     if (isStreaming) return
+
+    abortControllerRef.current?.abort()
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
     setIsStreaming(true)
-    abortRef.current = false
 
     addMessage({ role: 'user', content: question })
     addMessage({ role: 'assistant', content: '' })
@@ -29,17 +33,33 @@ export function useStreamQuery() {
         articleIds: opts?.articleIds,
         mode: opts?.mode,
         detailLevel: opts?.detailLevel ?? 0,
+        signal: controller.signal,
       },
       (chunk) => {
-        if (!abortRef.current) updateLastAssistant(chunk)
+        if (!controller.signal.aborted) updateLastAssistant(chunk)
       },
       undefined,
-      (err) => updateLastAssistant(`\n[Error: ${err}]`)
-    ).finally(() => setIsStreaming(false))
+      (err) => {
+        if (!controller.signal.aborted) updateLastAssistant(`\n[Error: ${err}]`)
+      },
+    )
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === 'AbortError') return
+        if (!controller.signal.aborted) {
+          updateLastAssistant(`\n[Error: ${err instanceof Error ? err.message : String(err)}]`)
+        }
+      })
+      .finally(() => {
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null
+        }
+        setIsStreaming(false)
+      })
   }
 
   const stop = () => {
-    abortRef.current = true
+    abortControllerRef.current?.abort()
+    abortControllerRef.current = null
     setIsStreaming(false)
   }
 
