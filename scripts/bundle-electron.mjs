@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Bundle Electron main/preload and Express server for packaged installs.
+ * Bundle Electron main/preload for packaged installs.
+ * Express server bundle: scripts/bundle-server.mjs (via build:electron).
  */
 import * as esbuild from "esbuild";
 import path from "path";

@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build-mac:
+  build-mac-arm64:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -28,21 +28,68 @@ jobs:
       - name: Generate icon
         run: node scripts/generate-icon.mjs
 
-      - name: Rebuild native modules for Electron
+      - name: Rebuild native modules for Electron (arm64)
         run: npm run rebuild:app-native
 
-      - name: Build macOS DMG
+      - name: Build macOS arm64 DMG
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: npm run dist:mac
+        run: npm run dist:mac-arm64
 
-      - name: Upload macOS artifact
+      - name: Verify better-sqlite3 native binary
+        run: |
+          test -n "$(find dist-installers -name '*.dmg' -print -quit)" || (echo "No DMG produced" && exit 1)
+          hdiutil attach "$(find dist-installers -name '*-mac-arm64.dmg' | head -1)" -nobrowse -mountpoint /tmp/litreview-dmg
+          test -f "/tmp/litreview-dmg/Lit Review Agent.app/Contents/Resources/app/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
+          hdiutil detach /tmp/litreview-dmg
+
+      - name: Upload macOS arm64 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mac-installer
-          path: dist-installers/*.dmg
+          name: mac-arm64-installer
+          path: dist-installers/*-mac-arm64.dmg
 
-  build-windows:
+  build-mac-x64:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm --prefix app ci
+          npm --prefix frontend ci
+
+      - name: Generate icon
+        run: node scripts/generate-icon.mjs
+
+      - name: Rebuild native modules for Electron (x64)
+        run: TARGET_ARCH=x64 npm run rebuild:app-native
+
+      - name: Build macOS x64 DMG
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run dist:mac-x64
+
+      - name: Verify better-sqlite3 native binary
+        run: |
+          test -n "$(find dist-installers -name '*-mac-x64.dmg' -print -quit)" || (echo "No x64 DMG produced" && exit 1)
+          hdiutil attach "$(find dist-installers -name '*-mac-x64.dmg' | head -1)" -nobrowse -mountpoint /tmp/litreview-dmg-x64
+          test -f "/tmp/litreview-dmg-x64/Lit Review Agent.app/Contents/Resources/app/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
+          hdiutil detach /tmp/litreview-dmg-x64
+
+      - name: Upload macOS x64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-x64-installer
+          path: dist-installers/*-mac-x64.dmg
+
+  build-win-x64:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,20 +108,63 @@ jobs:
       - name: Generate icon
         run: node scripts/generate-icon.mjs
 
-      - name: Rebuild native modules for Electron
+      - name: Rebuild native modules for Electron (x64)
         run: npm run rebuild:app-native
 
-      - name: Build Windows installer
-        run: npm run dist:win
+      - name: Build Windows x64 installer
+        run: npm run dist:win-x64
 
-      - name: Upload Windows artifact
+      - name: Verify installer exists
+        shell: pwsh
+        run: |
+          if (-not (Get-ChildItem dist-installers/*-win-x64.exe)) { throw "No x64 installer" }
+
+      - name: Upload Windows x64 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: win-installer
-          path: dist-installers/*.exe
+          name: win-x64-installer
+          path: dist-installers/*-win-x64.exe
+
+  build-win-arm64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm --prefix app ci
+          npm --prefix frontend ci
+
+      - name: Generate icon
+        run: node scripts/generate-icon.mjs
+
+      - name: Rebuild native modules for Electron (arm64)
+        run: npm run rebuild:app-native
+        env:
+          TARGET_ARCH: arm64
+
+      - name: Build Windows arm64 installer
+        run: npm run dist:win-arm64
+
+      - name: Verify installer exists
+        shell: pwsh
+        run: |
+          if (-not (Get-ChildItem dist-installers/*-win-arm64.exe)) { throw "No arm64 installer" }
+
+      - name: Upload Windows arm64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-arm64-installer
+          path: dist-installers/*-win-arm64.exe
 
   release:
-    needs: [build-mac, build-windows]
+    needs: [build-mac-arm64, build-mac-x64, build-win-x64, build-win-arm64]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

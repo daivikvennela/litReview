@@ -8,12 +8,14 @@ Installers are built with Electron—no Node or git required.
 
 | Platform | Install |
 |----------|---------|
-| **macOS** | Download `Lit Review Agent-*-mac-universal.dmg` from [Releases](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent/releases), open it, drag **Lit Review Agent** to Applications |
-| **Windows** | Download `Lit Review Agent-*-win-x64.exe` (or arm64) from Releases and run the installer |
+| **macOS Apple Silicon** | Download `Lit Review Agent-*-mac-arm64.dmg` from [Releases](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent/releases), open it, drag **Lit Review Agent** to Applications |
+| **macOS Intel** | Download `Lit Review Agent-*-mac-x64.dmg` from Releases |
+| **Windows x64** | Download `Lit Review Agent-*-win-x64.exe` from Releases and run the installer |
+| **Windows ARM64** | Download `Lit Review Agent-*-win-arm64.exe` from Releases |
 
 **First launch**
 
-1. If prompted about **Java**, install [Adoptium JDK 11+](https://adoptium.net/) for the default PDF parser (OpenDataLoader), or continue without Java and use GROBID.
+1. If prompted about **Java**, install [Adoptium JDK 11+](https://adoptium.net/) for the default PDF parser (OpenDataLoader), then **restart the app**. Or continue without Java and use GROBID.
 2. Open **Settings** and set your **OpenRouter API key** (or edit the `.env` file in the app data folder—see [PACKAGING.md](PACKAGING.md)).
 
 **Unsigned builds:** macOS → right-click the app → **Open**. Windows → SmartScreen → **More info** → **Run anyway**.
@@ -111,8 +113,10 @@ npm run dev:electron  # Electron shell + embedded server
 npm run build         # compile frontend and output to app/public
 npm run build:electron # bundle for desktop packaging
 npm start             # run express server with built frontend
-npm run dist:mac      # build macOS .dmg (on macOS)
-npm run dist:win      # build Windows .exe (on Windows)
+npm run dist:mac-arm64 # build macOS Apple Silicon .dmg (on macOS)
+npm run dist:mac-x64   # build macOS Intel .dmg (on macOS)
+npm run dist:win-x64   # build Windows x64 .exe (on Windows)
+npm run dist:win-arm64 # build Windows ARM64 .exe (on Windows)
 ```
 
 ## GROBID notes
@@ -129,6 +133,7 @@ npm run dist:win      # build Windows .exe (on Windows)
 - **Port 8070 already in use**: stop the existing service or change `GROBID_URL`.
 - **OpenRouter errors**: verify `OPENROUTER_API_KEY` in `.env` and restart the app.
 - **Desktop app won't open (macOS)**: right-click → Open for unsigned builds.
+- **"Could not start the local server"**: use **Open log folder** in the error dialog; see [PACKAGING.md](PACKAGING.md) troubleshooting.
 
 ## Stack
 
