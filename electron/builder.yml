@@ -35,10 +35,7 @@ extraResources:
 mac:
   category: public.app-category.productivity
   target:
-    - target: dmg
-      arch:
-        - arm64
-        - x64
+    - dmg
   # Unsigned CI builds (set CSC_* secrets + hardenedRuntime for production signing)
   identity: "-"
   hardenedRuntime: false
@@ -53,10 +50,7 @@ dmg:
 
 win:
   target:
-    - target: nsis
-      arch:
-        - x64
-        - arm64
+    - nsis
 
 nsis:
   oneClick: false

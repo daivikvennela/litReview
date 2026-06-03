@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Rebuild native modules (better-sqlite3) for Electron when electron is installed.
- * Set TARGET_ARCH=arm64|x64|ia32 before running when cross-building installers.
+ * Rebuild app native deps (better-sqlite3) for Electron via electron-builder.
+ * Set TARGET_ARCH=arm64|x64 before running when cross-building installers.
  */
 import { spawnSync } from "child_process";
 import fs from "fs";
@@ -17,41 +17,32 @@ if (!fs.existsSync(electronPkg)) {
   process.exit(0);
 }
 
-const electronVersion = JSON.parse(fs.readFileSync(electronPkg, "utf8")).version;
-const appDir = path.join(root, "app");
 const targetArch = process.env.TARGET_ARCH?.trim();
-
-const rebuildArgs = [
-  "@electron/rebuild",
-  "-f",
-  "-w",
-  "better-sqlite3",
-  "-v",
-  electronVersion,
-  "-m",
-  appDir,
-];
-
+const args = ["electron-builder", "install-app-deps"];
 if (targetArch) {
-  rebuildArgs.push("--arch", targetArch);
-  console.log(`Rebuilding better-sqlite3 for Electron ${electronVersion} (arch=${targetArch})...`);
+  args.push(`--arch=${targetArch}`);
+  console.log(`Rebuilding app native modules for Electron (arch=${targetArch})...`);
 } else {
-  console.log(`Rebuilding better-sqlite3 for Electron ${electronVersion}...`);
+  console.log("Rebuilding app native modules for Electron...");
 }
 
-const result = spawnSync(
-  process.platform === "win32" ? "npx.cmd" : "npx",
-  rebuildArgs,
-  { cwd: appDir, stdio: "inherit", env: process.env },
-);
+const result = spawnSync("npx", args, {
+  cwd: root,
+  stdio: "inherit",
+  env: process.env,
+  shell: process.platform === "win32",
+});
 
 if (result.status !== 0) {
   const strict =
     process.env.CI === "true" || process.env.LITREVIEW_STRICT_REBUILD === "1";
   console.warn(
-    "postinstall-rebuild: @electron/rebuild failed" +
+    "postinstall-rebuild: install-app-deps failed" +
       (strict ? " (strict mode — failing)" : " (dev builds may still work with system Node)"),
   );
+  if (result.error) {
+    console.warn("postinstall-rebuild: spawn error:", result.error.message);
+  }
   process.exit(strict ? 1 : 0);
 }
 
