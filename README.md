@@ -4,14 +4,18 @@ Local-first literature review assistant for PDF ingestion, structured parsing, a
 
 ## Download (Windows & macOS)
 
-Installers are built with Electron—no Node or git required.
+Installers are built with Electron—no Node or git required. Get the latest release from **[GitHub Releases](https://github.com/daivikvennela/litReview/releases)** and pick the file that matches your CPU.
 
-| Platform | Install |
-|----------|---------|
-| **macOS Apple Silicon** | Download `Lit Review Agent-*-mac-arm64.dmg` from [Releases](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent/releases), open it, drag **Lit Review Agent** to Applications |
-| **macOS Intel** | Download `Lit Review Agent-*-mac-x64.dmg` from Releases |
-| **Windows x64** | Download `Lit Review Agent-*-win-x64.exe` from Releases and run the installer |
-| **Windows ARM64** | Download `Lit Review Agent-*-win-arm64.exe` from Releases |
+| Platform | Chip / device | Download this file | How to install |
+|----------|---------------|-------------------|----------------|
+| **macOS** | Apple Silicon (M1, M2, M3, M4) | `Lit Review Agent-*-mac-arm64.dmg` | Open the DMG → drag **Lit Review Agent** to **Applications** |
+| **macOS** | Intel (pre-2020 Macs) | `Lit Review Agent-*-mac-x64.dmg` | Open the DMG → drag **Lit Review Agent** to **Applications** |
+| **Windows** | x64 (most PCs & laptops) | `Lit Review Agent-*-win-x64.exe` | Run the installer → launch from the Start Menu shortcut |
+| **Windows** | ARM64 (Surface Pro X, Snapdragon PCs) | `Lit Review Agent-*-win-arm64.exe` | Run the installer → launch from the Start Menu shortcut |
+
+**Not sure which Mac you have?** Apple menu → **About This Mac** → look for **Chip** (Apple M…) vs **Processor** (Intel).
+
+**Not sure which Windows build?** **Settings → System → About** → **System type** shows **64-bit (x64)** or **ARM64**.
 
 **First launch**
 
@@ -108,6 +112,7 @@ This serves the built frontend from the Express server.
 ## Useful commands
 
 ```bash
+npm run dev:setup     # once after npm install — rebuild SQLite for local Node dev
 npm run dev           # backend + frontend (recommended for local development)
 npm run dev:electron  # Electron shell + embedded server
 npm run build         # compile frontend and output to app/public
