@@ -4,18 +4,31 @@ Local-first literature review assistant for PDF ingestion, structured parsing, a
 
 ## Download (Windows & macOS)
 
-Installers are built with Electron—no Node or git required. Get the latest release from **[GitHub Releases](https://github.com/daivikvennela/litReview/releases)** and pick the file that matches your CPU.
+Installers are built with Electron—no Node or git required.
 
-| Platform | Chip / device | Download this file | How to install |
-|----------|---------------|-------------------|----------------|
-| **macOS** | Apple Silicon (M1, M2, M3, M4) | `Lit Review Agent-*-mac-arm64.dmg` | Open the DMG → drag **Lit Review Agent** to **Applications** |
-| **macOS** | Intel (pre-2020 Macs) | `Lit Review Agent-*-mac-x64.dmg` | Open the DMG → drag **Lit Review Agent** to **Applications** |
-| **Windows** | x64 (most PCs & laptops) | `Lit Review Agent-*-win-x64.exe` | Run the installer → launch from the Start Menu shortcut |
-| **Windows** | ARM64 (Surface Pro X, Snapdragon PCs) | `Lit Review Agent-*-win-arm64.exe` | Run the installer → launch from the Start Menu shortcut |
+**→ [Download latest release](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent/releases/latest)** (repo: [Papers-Articles-Literature-Review-Agent](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent))
 
-**Not sure which Mac you have?** Apple menu → **About This Mac** → look for **Chip** (Apple M…) vs **Processor** (Intel).
+### Quick pick — which file is yours?
 
-**Not sure which Windows build?** **Settings → System → About** → **System type** shows **64-bit (x64)** or **ARM64**.
+| I have… | Download this asset |
+|---------|---------------------|
+| Mac with **Apple chip** (M1, M2, M3, M4) | `Lit Review Agent-*-mac-arm64.dmg` |
+| Mac with **Intel** processor | `Lit Review Agent-*-mac-x64.dmg` |
+| Windows PC (**64-bit**, most laptops/desktops) | `Lit Review Agent-*-win-x64.exe` |
+| Windows **ARM** PC (Surface Pro X, Snapdragon) | `Lit Review Agent-*-win-arm64.exe` |
+
+### Full download table
+
+| Platform | Chip / device | Filename on Releases | Install |
+|----------|---------------|----------------------|---------|
+| **macOS** | Apple Silicon | `*-mac-arm64.dmg` | Open DMG → drag **Lit Review Agent** to **Applications** |
+| **macOS** | Intel | `*-mac-x64.dmg` | Open DMG → drag **Lit Review Agent** to **Applications** |
+| **Windows** | x64 | `*-win-x64.exe` | Run installer → Start Menu shortcut |
+| **Windows** | ARM64 | `*-win-arm64.exe` | Run installer → Start Menu shortcut |
+
+**Not sure which Mac?**  → **About This Mac** → **Chip** = Apple Silicon (`*-mac-arm64`) · **Processor** = Intel (`*-mac-x64`)
+
+**Not sure which Windows?** → **Settings → System → About** → **64-bit (x64)** = `*-win-x64` · **ARM64** = `*-win-arm64`
 
 **First launch**
 
