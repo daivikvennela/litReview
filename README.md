@@ -6,29 +6,29 @@ Local-first literature review assistant for PDF ingestion, structured parsing, a
 
 Installers are built with Electron—no Node or git required.
 
-**→ [Download latest release](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent/releases/latest)** (repo: [Papers-Articles-Literature-Review-Agent](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent))
+Repo: [preethamam/Papers-Articles-Literature-Review-Agent](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent) · All assets: [Releases](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent/releases/latest)
 
-### Quick pick — which file is yours?
+### Quick pick — click your download
 
-| I have… | Download this asset |
-|---------|---------------------|
-| Mac with **Apple chip** (M1, M2, M3, M4) | `Lit Review Agent-*-mac-arm64.dmg` |
-| Mac with **Intel** processor | `Lit Review Agent-*-mac-x64.dmg` |
-| Windows PC (**64-bit**, most laptops/desktops) | `Lit Review Agent-*-win-x64.exe` |
-| Windows **ARM** PC (Surface Pro X, Snapdragon) | `Lit Review Agent-*-win-arm64.exe` |
+| I have… | Download |
+|---------|----------|
+| Mac with **Apple chip** (M1, M2, M3, M4) | [**macOS Apple Silicon (.dmg)**](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent/releases/latest/download/Lit.Review.Agent-2.0.0-mac-arm64.dmg) |
+| Mac with **Intel** processor | [**macOS Intel (.dmg)**](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent/releases/latest/download/Lit.Review.Agent-2.0.0-mac-x64.dmg) |
+| Windows PC (**64-bit**, most laptops/desktops) | [**Windows x64 (.exe)**](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent/releases/latest/download/Lit.Review.Agent-2.0.0-win-x64.exe) |
+| Windows **ARM** PC (Surface Pro X, Snapdragon) | [**Windows ARM64 (.exe)**](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent/releases/latest/download/Lit.Review.Agent-2.0.0-win-arm64.exe) |
 
 ### Full download table
 
-| Platform | Chip / device | Filename on Releases | Install |
-|----------|---------------|----------------------|---------|
-| **macOS** | Apple Silicon | `*-mac-arm64.dmg` | Open DMG → drag **Lit Review Agent** to **Applications** |
-| **macOS** | Intel | `*-mac-x64.dmg` | Open DMG → drag **Lit Review Agent** to **Applications** |
-| **Windows** | x64 | `*-win-x64.exe` | Run installer → Start Menu shortcut |
-| **Windows** | ARM64 | `*-win-arm64.exe` | Run installer → Start Menu shortcut |
+| Platform | Chip / device | Download | Install |
+|----------|---------------|----------|---------|
+| **macOS** | Apple Silicon | [mac-arm64.dmg](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent/releases/latest/download/Lit.Review.Agent-2.0.0-mac-arm64.dmg) | Open DMG → drag **Lit Review Agent** to **Applications** |
+| **macOS** | Intel | [mac-x64.dmg](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent/releases/latest/download/Lit.Review.Agent-2.0.0-mac-x64.dmg) | Open DMG → drag **Lit Review Agent** to **Applications** |
+| **Windows** | x64 | [win-x64.exe](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent/releases/latest/download/Lit.Review.Agent-2.0.0-win-x64.exe) | Run installer → Start Menu shortcut |
+| **Windows** | ARM64 | [win-arm64.exe](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent/releases/latest/download/Lit.Review.Agent-2.0.0-win-arm64.exe) | Run installer → Start Menu shortcut |
 
-**Not sure which Mac?**  → **About This Mac** → **Chip** = Apple Silicon (`*-mac-arm64`) · **Processor** = Intel (`*-mac-x64`)
+**Not sure which Mac?** → **About This Mac** → **Chip** = [Apple Silicon download](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent/releases/latest/download/Lit.Review.Agent-2.0.0-mac-arm64.dmg) · **Processor** = [Intel download](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent/releases/latest/download/Lit.Review.Agent-2.0.0-mac-x64.dmg)
 
-**Not sure which Windows?** → **Settings → System → About** → **64-bit (x64)** = `*-win-x64` · **ARM64** = `*-win-arm64`
+**Not sure which Windows?** → **Settings → System → About** → **64-bit (x64)** = [x64 download](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent/releases/latest/download/Lit.Review.Agent-2.0.0-win-x64.exe) · **ARM64** = [ARM64 download](https://github.com/preethamam/Papers-Articles-Literature-Review-Agent/releases/latest/download/Lit.Review.Agent-2.0.0-win-arm64.exe)
 
 **First launch**
 
