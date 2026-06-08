@@ -109,11 +109,11 @@ If the app shows **"Could not start the local server"** or **"Server did not bec
 | Failure injection | Break sqlite `.node` | Explicit native error with exit code |
 | Dev regression | `npm run dev:electron` | Unchanged |
 
-## Code signing & notarization (macOS — required for releases)
+## Code signing & notarization (macOS — optional, $99/year Apple fee)
 
-**Setup guide:** [docs/MACOS_SIGNING.md](docs/MACOS_SIGNING.md)
+**Default:** unsigned DMGs (free). Users run `xattr -cr "/Applications/Lit Review Agent.app"` once — see README.
 
-GitHub Actions release jobs for macOS **require** these secrets (signed + notarized DMGs):
+**Optional paid path:** [docs/MACOS_SIGNING.md](docs/MACOS_SIGNING.md). If these GitHub secrets are set, CI signs + notarizes automatically:
 
 | Secret | Purpose |
 |--------|---------|

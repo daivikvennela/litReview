@@ -35,24 +35,24 @@ Repo: [preethamam/Papers-Articles-Literature-Review-Agent](https://github.com/pr
 1. If prompted about **Java**, install [Adoptium JDK 11+](https://adoptium.net/) for the default PDF parser (OpenDataLoader), then **restart the app**. Or continue without Java and use GROBID.
 2. Open **Settings** and set your **OpenRouter API key** (or edit the `.env` file in the app data folder—see [PACKAGING.md](PACKAGING.md)).
 
-### macOS: “damaged and can’t be opened”
+### macOS: “damaged and can’t be opened” (free fix — no Apple fee)
 
-**Newer signed releases** (after Apple notarization is configured in CI) should open normally. If you still see this on an old download, use the steps below.
+Releases are **unsigned** (Apple charges **$99/year** for signing). The app is **not** broken — macOS Gatekeeper blocks downloads from the web and often says **damaged** instead of **unidentified developer**.
 
-The app is **not** corrupted. **Unsigned** GitHub downloads are blocked by Gatekeeper and sometimes show **damaged** instead of **unidentified developer**. Maintainers: see [docs/MACOS_SIGNING.md](docs/MACOS_SIGNING.md) to enable signed releases.
-
-**Fix (pick one):**
-
-1. **Right-click** **Lit Review Agent** in Applications → **Open** → confirm **Open** (not double-click).
-2. If that still fails, run in **Terminal** (clears the download quarantine flag):
+**Do this once after installing** (copy-paste into **Terminal**):
 
 ```bash
 xattr -cr "/Applications/Lit Review Agent.app"
 ```
 
-Then open the app normally from Applications.
+Then open **Lit Review Agent** from Applications as usual.
 
-3. Or: **System Settings → Privacy & Security** → scroll down → **Open Anyway** (after a blocked launch attempt).
+**Other options:**
+
+1. **Right-click** the app in Applications → **Open** → **Open** (don’t double-click the first time).
+2. **System Settings → Privacy & Security → Open Anyway** (appears after one blocked launch).
+
+You only need to run `xattr` again if you **re-download** a new version from GitHub.
 
 **Windows unsigned builds:** SmartScreen → **More info** → **Run anyway**.
 

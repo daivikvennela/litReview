@@ -1,6 +1,9 @@
-# macOS code signing & notarization
+# macOS code signing & notarization (optional — paid)
 
-Signed and notarized builds open on macOS without the **“damaged and can’t be opened”** Gatekeeper error.
+**Don’t want to pay $99/year?** Use the free workaround in the README:  
+`xattr -cr "/Applications/Lit Review Agent.app"` after install.
+
+This guide is only if you later want **one-click open** for all users without that step.
 
 ## Prerequisites
 

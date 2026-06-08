@@ -34,36 +34,14 @@ jobs:
       - name: Rebuild native modules for Electron (arm64)
         run: npm run rebuild:app-native
 
-      - name: Require macOS signing secrets
-        shell: bash
+      - name: Build macOS arm64 DMG
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          set -euo pipefail
-          missing=0
-          for v in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
-            if [ -z "${!v:-}" ]; then
-              echo "::error::Missing GitHub secret: $v — see docs/MACOS_SIGNING.md"
-              missing=1
-            fi
-          done
-          [ "$missing" -eq 0 ]
-
-      - name: Build macOS arm64 DMG (signed + notarized)
-        env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npm run dist:mac-arm64:signed
-
-      - name: Verify code signature and notarization
-        run: bash scripts/verify-mac-signing.sh
+        run: bash scripts/build-mac-release.sh arm64
 
       - name: Verify better-sqlite3 native binary
         run: |
@@ -103,36 +81,14 @@ jobs:
       - name: Rebuild native modules for Electron (x64)
         run: TARGET_ARCH=x64 npm run rebuild:app-native
 
-      - name: Require macOS signing secrets
-        shell: bash
+      - name: Build macOS x64 DMG
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          set -euo pipefail
-          missing=0
-          for v in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
-            if [ -z "${!v:-}" ]; then
-              echo "::error::Missing GitHub secret: $v — see docs/MACOS_SIGNING.md"
-              missing=1
-            fi
-          done
-          [ "$missing" -eq 0 ]
-
-      - name: Build macOS x64 DMG (signed + notarized)
-        env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npm run dist:mac-x64:signed
-
-      - name: Verify code signature and notarization
-        run: bash scripts/verify-mac-signing.sh
+        run: bash scripts/build-mac-release.sh x64
 
       - name: Assert single x64 DMG artifact
         run: |
