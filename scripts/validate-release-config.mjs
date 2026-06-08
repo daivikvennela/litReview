@@ -38,4 +38,8 @@ if (!fs.existsSync(path.join(root, "scripts/bundle-server.mjs"))) {
   fail("missing scripts/bundle-server.mjs");
 }
 
+if (!fs.existsSync(path.join(root, "electron/builder.signing-mac.yml"))) {
+  fail("missing electron/builder.signing-mac.yml");
+}
+
 console.log("validate-release-config: OK");

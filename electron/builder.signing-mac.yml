@@ -1,0 +1,7 @@
+# Merged in CI when CSC_LINK + APPLE_* secrets are set (see docs/MACOS_SIGNING.md).
+mac:
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  notarize: true

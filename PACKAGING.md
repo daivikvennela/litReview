@@ -109,15 +109,21 @@ If the app shows **"Could not start the local server"** or **"Server did not bec
 | Failure injection | Break sqlite `.node` | Explicit native error with exit code |
 | Dev regression | `npm run dev:electron` | Unchanged |
 
-## Code signing (optional)
+## Code signing & notarization (macOS — required for releases)
 
-Set these secrets in GitHub Actions (or locally) for signed installers:
+**Setup guide:** [docs/MACOS_SIGNING.md](docs/MACOS_SIGNING.md)
+
+GitHub Actions release jobs for macOS **require** these secrets (signed + notarized DMGs):
 
 | Secret | Purpose |
 |--------|---------|
-| `CSC_LINK`, `CSC_KEY_PASSWORD` | macOS Developer ID |
-| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | Notarization |
-| `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD` | Windows Authenticode |
+| `CSC_LINK`, `CSC_KEY_PASSWORD` | Developer ID Application certificate (`.p12`, base64) |
+| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | Apple notarization |
+
+Optional Windows Authenticode: `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD`
+
+Unsigned local builds: `npm run dist:mac-arm64` (no secrets).  
+Signed release builds (CI): `npm run dist:mac-arm64:signed` with env vars set.
 
 Without signing, macOS users often see **“Lit Review Agent is damaged and can’t be opened”** — the app is fine; Gatekeeper quarantined the download. Fixes:
 

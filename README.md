@@ -37,7 +37,9 @@ Repo: [preethamam/Papers-Articles-Literature-Review-Agent](https://github.com/pr
 
 ### macOS: “damaged and can’t be opened”
 
-The app is **not** corrupted. GitHub downloads are **unsigned**, so macOS Gatekeeper blocks them and sometimes shows **damaged** instead of **unidentified developer**.
+**Newer signed releases** (after Apple notarization is configured in CI) should open normally. If you still see this on an old download, use the steps below.
+
+The app is **not** corrupted. **Unsigned** GitHub downloads are blocked by Gatekeeper and sometimes show **damaged** instead of **unidentified developer**. Maintainers: see [docs/MACOS_SIGNING.md](docs/MACOS_SIGNING.md) to enable signed releases.
 
 **Fix (pick one):**
 

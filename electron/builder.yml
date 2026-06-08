@@ -36,8 +36,7 @@ mac:
   category: public.app-category.productivity
   target:
     - dmg
-  # Unsigned CI builds (set CSC_* secrets + hardenedRuntime for production signing)
-  identity: "-"
+  # Local/unsigned default. CI release uses electron/builder.signing-mac.yml overlay.
   hardenedRuntime: false
   gatekeeperAssess: false
   notarize: false
