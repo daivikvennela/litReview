@@ -4,7 +4,17 @@ import { X, RefreshCw, Link2, FileText, BookOpen, Code, Copy, Download, ChevronR
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { cn } from '@/lib/utils'
-import { getArticle, getReviews, runReview, getSettings, getModels, type ArticleWithReviews, type Review } from '@/lib/api'
+import {
+  getArticle,
+  getReviews,
+  runReview,
+  getSettings,
+  getModels,
+  type ArticleWithReviews,
+  type Review,
+  type ArticleParseOutput,
+} from '@/lib/api'
+import { formatParsePayload, parserEngineLabel } from '@/lib/parseOutputDisplay'
 import { DEFAULT_MODEL_ID } from '@/lib/modelCatalog'
 import MarkdownContent from '@/components/MarkdownContent'
 import AuthorsDropdown from '@/components/AuthorsDropdown'
@@ -227,7 +237,12 @@ export default function ArticleDrawer({ article, articleId, onClose, onRefetch }
           )}
 
           {tab === 'extracted' && (
-            <ExtractedDataViewer xml={article.xml ?? null} filename={article.pdf_path || article.id} />
+            <ExtractedDataViewer
+              xml={article.xml ?? null}
+              parseOutput={article.parse_output ?? null}
+              parserEngine={article.parser_engine ?? article.parse_output?.parser_engine}
+              filename={article.pdf_path || article.id}
+            />
           )}
 
           {tab === 'task1' && (
@@ -358,60 +373,80 @@ function XmlTree({ xml }: { xml: string }) {
   )
 }
 
-function ExtractedDataViewer({ xml, filename }: { xml: string | null; filename: string }) {
+function ExtractedDataViewer({
+  xml,
+  parseOutput,
+  parserEngine,
+  filename,
+}: {
+  xml: string | null
+  parseOutput?: ArticleParseOutput | null
+  parserEngine?: string | null
+  filename: string
+}) {
   const [copied, setCopied] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('code')
   const baseName = filename.replace(/\.pdf$/i, '') || 'article'
+  const hasXml = Boolean(xml?.trim())
+  const rawText = hasXml
+    ? xml!
+    : formatParsePayload(parseOutput?.payload_json) || parseOutput?.normalized_text?.trim() || ''
+  const hasContent = hasXml || Boolean(rawText.trim())
+  const label = hasXml
+    ? 'TEI XML (GROBID export)'
+    : `Parse output (${parserEngineLabel(parserEngine ?? parseOutput?.parser_engine)})`
+  const downloadExt = hasXml ? 'xml' : parseOutput?.output_format === 'json' ? 'json' : 'txt'
+  const mime = hasXml ? 'application/xml' : 'text/plain'
 
   const handleCopy = () => {
-    if (!xml) return
-    navigator.clipboard.writeText(xml).then(() => {
+    if (!hasContent) return
+    navigator.clipboard.writeText(rawText).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
   }
 
   const handleDownload = () => {
-    if (!xml) return
-    const blob = new Blob([xml], { type: 'application/xml' })
+    if (!hasContent) return
+    const blob = new Blob([rawText], { type: mime })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${baseName}.xml`
+    a.download = `${baseName}.${downloadExt}`
     a.click()
     URL.revokeObjectURL(url)
   }
 
-  if (xml == null || (typeof xml === 'string' && xml.trim() === '')) {
+  if (!hasContent) {
     return (
       <div className="text-center py-12 text-slate-400">
         <Code className="w-10 h-10 mx-auto mb-3 opacity-40" />
         <p className="font-medium text-slate-500">No extracted data</p>
-        <p className="text-sm mt-1">Parse a PDF from the Upload page to see GROBID TEI XML here.</p>
+        <p className="text-sm mt-1">Parse a PDF from the Upload page to see extracted content here.</p>
       </div>
     )
   }
 
   return (
     <div className="space-y-3">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-        TEI XML (GROBID export)
-      </p>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-          <button
-            type="button"
-            onClick={() => setViewMode('tree')}
-            className={`px-2.5 py-1 rounded text-[12px] font-medium ${viewMode === 'tree' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            Tree
-          </button>
+          {hasXml && (
+            <button
+              type="button"
+              onClick={() => setViewMode('tree')}
+              className={`px-2.5 py-1 rounded text-[12px] font-medium ${viewMode === 'tree' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Tree
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setViewMode('code')}
             className={`px-2.5 py-1 rounded text-[12px] font-medium ${viewMode === 'code' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
-            Code
+            {hasXml ? 'Code' : 'Raw'}
           </button>
         </div>
         <button
@@ -428,15 +463,15 @@ function ExtractedDataViewer({ xml, filename }: { xml: string | null; filename: 
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-[12px] font-medium"
         >
           <Download className="w-3.5 h-3.5" />
-          Download .xml
+          Download .{downloadExt}
         </button>
       </div>
       <div className="min-h-[300px]">
-        {viewMode === 'tree' ? (
-          <XmlTree xml={xml} />
+        {viewMode === 'tree' && hasXml ? (
+          <XmlTree xml={xml!} />
         ) : (
           <pre className="text-[11px] font-mono bg-slate-900 text-slate-100 p-4 rounded-xl overflow-auto max-h-[70vh] whitespace-pre-wrap break-words border border-slate-200">
-            {xml}
+            {rawText}
           </pre>
         )}
       </div>

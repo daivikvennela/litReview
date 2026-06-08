@@ -215,7 +215,18 @@ router.get("/:id", (req: Request, res: Response) => {
     return;
   }
   const reviews = getReviews(id);
-  res.json({ ...article, reviews });
+  const latest = getLatestParseOutput(id);
+  const parse_output = latest
+    ? {
+        parser_engine: latest.parser_engine,
+        parser_model: latest.parser_model,
+        output_format: latest.output_format,
+        normalized_text: latest.normalized_text,
+        payload_json: latest.payload_json?.slice(0, 500_000) ?? null,
+        created_at: latest.created_at,
+      }
+    : null;
+  res.json({ ...article, reviews, parse_output });
 });
 
 router.delete("/all", (_req: Request, res: Response) => {
@@ -386,7 +397,7 @@ router.post("/batch", upload.array("pdfs", 200), async (req: Request, res: Respo
         total: files.length,
         filename: file.originalname,
         status: "error",
-        error: message,
+        error: `[${engine}] ${message}`,
         engine,
       });
     }

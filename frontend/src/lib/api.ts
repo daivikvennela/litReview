@@ -27,8 +27,18 @@ export interface Article {
   llm_literature_review?: string | null
 }
 
+export interface ArticleParseOutput {
+  parser_engine: string
+  parser_model: string
+  output_format: string
+  normalized_text: string | null
+  payload_json: string | null
+  created_at: string
+}
+
 export interface ArticleWithReviews extends Article {
   reviews?: Review[]
+  parse_output?: ArticleParseOutput | null
 }
 
 export interface Review {
@@ -421,11 +431,32 @@ export const getOpendataloaderStatus = () =>
       hybridEnabled: boolean
       hybridUrl: string
       hybridAlive: boolean
+      jarOk?: boolean
+      jarPath?: string
+      legacyJarOk?: boolean
     }>('/opendataloader/status')
     .then((r) => r.data)
 
 export const startOpendataloaderHybrid = () =>
   api.post<{ ok: boolean; message?: string }>('/opendataloader/start-hybrid').then((r) => r.data)
+
+export type OpendataloaderRepairResult = {
+  ok: boolean
+  message: string
+  steps: string[]
+  jarStatus: { jarOk: boolean; jarPath: string; legacyJarOk: boolean }
+}
+
+export const repairOpendataloader = () =>
+  api
+    .post<OpendataloaderRepairResult>('/opendataloader/repair')
+    .then((r) => r.data)
+    .catch((err: unknown) => {
+      if (axios.isAxiosError(err) && err.response?.data) {
+        return err.response.data as OpendataloaderRepairResult
+      }
+      throw err
+    })
 
 // ----- Ollama -----
 export const getOllamaStatus = () =>

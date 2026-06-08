@@ -2,6 +2,7 @@ import { execFile, execFileSync, spawn } from "child_process";
 import { promisify } from "util";
 import { Router, Response } from "express";
 import { getSetting } from "../db.js";
+import { getOpenDataLoaderJarStatus, repairOpenDataLoader } from "../lib/opendataloaderRepair.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -71,6 +72,7 @@ router.get("/status", async (_req, res: Response) => {
   if (hybridEnabled) {
     hybridAlive = await pingHybrid(hybridUrl);
   }
+  const jar = getOpenDataLoaderJarStatus();
   res.json({
     javaOk: java.ok,
     javaMajor: java.major,
@@ -78,7 +80,25 @@ router.get("/status", async (_req, res: Response) => {
     hybridEnabled,
     hybridUrl,
     hybridAlive,
+    jarOk: jar.jarOk || jar.legacyJarOk,
+    jarPath: jar.jarPath,
+    legacyJarOk: jar.legacyJarOk,
   });
+});
+
+router.post("/repair", async (_req, res: Response) => {
+  try {
+    const result = await repairOpenDataLoader();
+    res.status(result.ok ? 200 : 500).json(result);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Repair failed";
+    res.status(500).json({
+      ok: false,
+      message: msg,
+      steps: [],
+      jarStatus: getOpenDataLoaderJarStatus(),
+    });
+  }
 });
 
 router.post("/start-hybrid", (_req, res: Response) => {

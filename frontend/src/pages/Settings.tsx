@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Settings as SettingsIcon, Key, Server, Cpu, Play, FileSearch, Layers, BarChart3 } from 'lucide-react'
+import { Settings as SettingsIcon, Key, Server, Cpu, Play, FileSearch, Layers, BarChart3, Wrench } from 'lucide-react'
 import {
   getSettings,
   updateSettings,
@@ -10,6 +10,7 @@ import {
   getOllamaModels,
   getOpendataloaderStatus,
   startOpendataloaderHybrid,
+  repairOpendataloader,
   getDotsOcrStatus,
   getChandraOcrStatus,
 } from '@/lib/api'
@@ -48,6 +49,8 @@ export default function Settings() {
   const [odlHybridAlive, setOdlHybridAlive] = useState<boolean | null>(null)
   const [odlJavaDetail, setOdlJavaDetail] = useState('')
   const [odlStartMessage, setOdlStartMessage] = useState<string | null>(null)
+  const [odlJarOk, setOdlJarOk] = useState<boolean | null>(null)
+  const [odlRepairing, setOdlRepairing] = useState(false)
   const [dotsAlive, setDotsAlive] = useState<boolean | null>(null)
   const [chandraAlive, setChandraAlive] = useState<boolean | null>(null)
 
@@ -119,6 +122,7 @@ export default function Settings() {
           setOdlJavaOk(r.javaOk)
           setOdlHybridAlive(r.hybridAlive)
           setOdlJavaDetail(r.javaDetail ?? '')
+          setOdlJarOk(r.jarOk ?? null)
         })
         .catch(() => {
           setOdlJavaOk(false)
@@ -155,11 +159,38 @@ export default function Settings() {
 
   const handleSave = () => {
     setSaving(true)
-    const payload: Partial<Settings> = { ...settings }
-    if (apiKeyValue) payload.openrouter_api_key = apiKeyValue
+    // Never echo the masked key (e.g. "sk-o****") from GET /settings back to the
+    // server — that would clobber the real stored key. Only send a freshly typed key.
+    const { openrouter_api_key: _masked, ...rest } = settings
+    const payload: Partial<Settings> = { ...rest }
+    if (apiKeyValue.trim()) payload.openrouter_api_key = apiKeyValue.trim()
     updateSettings(payload)
       .then(() => setSaving(false))
       .catch(() => setSaving(false))
+  }
+
+  const refreshOdlStatus = () =>
+    getOpendataloaderStatus().then((r) => {
+      setOdlJavaOk(r.javaOk)
+      setOdlHybridAlive(r.hybridAlive)
+      setOdlJavaDetail(r.javaDetail ?? '')
+      setOdlJarOk(r.jarOk ?? null)
+    })
+
+  const handleRepairOdl = () => {
+    setOdlStartMessage(null)
+    setOdlRepairing(true)
+    repairOpendataloader()
+      .then((resp) => {
+        const detail = resp.steps?.length ? `\n${resp.steps.join('\n')}` : ''
+        setOdlStartMessage(`${resp.message}${detail}`)
+        return refreshOdlStatus()
+      })
+      .catch((err: unknown) => {
+        setOdlStartMessage(err instanceof Error ? err.message : 'Repair failed')
+        return refreshOdlStatus()
+      })
+      .finally(() => setOdlRepairing(false))
   }
 
   const handleStartOdlHybrid = () => {
@@ -167,10 +198,7 @@ export default function Settings() {
     startOpendataloaderHybrid()
       .then((resp) => {
         setOdlStartMessage(resp?.message ?? (resp?.ok ? 'Hybrid server start requested.' : 'Could not start hybrid.'))
-        return getOpendataloaderStatus().then((r) => {
-          setOdlJavaOk(r.javaOk)
-          setOdlHybridAlive(r.hybridAlive)
-        })
+        return refreshOdlStatus()
       })
       .catch((e: unknown) => {
         const msg =
@@ -262,6 +290,16 @@ export default function Settings() {
               />
               <span className="text-[12px] text-slate-600 dark:text-slate-300">
                 Java {odlJavaOk === true ? 'OK (11+)' : odlJavaOk === false ? 'missing or below 11' : '…'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className={`w-2.5 h-2.5 rounded-full ${
+                  odlJarOk === true ? 'bg-emerald-500' : odlJarOk === false ? 'bg-red-500' : 'bg-slate-300'
+                }`}
+              />
+              <span className="text-[12px] text-slate-600 dark:text-slate-300">
+                Parser JAR {odlJarOk === true ? 'ready' : odlJarOk === false ? 'missing' : '…'}
               </span>
             </div>
             {settings.opendataloader_hybrid_enabled === 'true' && (
@@ -362,16 +400,28 @@ export default function Settings() {
             />
             <span className="text-[12px] text-slate-700 dark:text-slate-200">Use PDF structure tree (tagged PDF)</span>
           </label>
-          <button
-            type="button"
-            onClick={handleStartOdlHybrid}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-[12px] font-medium text-slate-700 dark:text-slate-200"
-          >
-            <Play className="w-3.5 h-3.5" /> Start hybrid server (CLI on PATH)
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleRepairOdl}
+              disabled={odlRepairing}
+              className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 rounded-xl text-[12px] font-medium text-white"
+            >
+              <Wrench className="w-3.5 h-3.5" />
+              {odlRepairing ? 'Running setup…' : 'Run OpenDataLoader setup'}
+            </button>
+            <button
+              type="button"
+              onClick={handleStartOdlHybrid}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-[12px] font-medium text-slate-700 dark:text-slate-200"
+            >
+              <Play className="w-3.5 h-3.5" /> Start hybrid server (CLI on PATH)
+            </button>
+          </div>
           <p className="text-[11px] text-slate-400 mt-2">
-            Port is taken from the Hybrid URL (default 5002). Save settings first so OCR/formula flags apply to the
-            spawned server.
+            Use <strong className="font-medium text-slate-500">Run OpenDataLoader setup</strong> if PDF parsing reports
+            a missing JAR — it installs or copies the Java parser and rebuilds the server bundle when developing from
+            source. Hybrid port is taken from the Hybrid URL (default 5002).
           </p>
           {odlStartMessage && (
             <p className="text-[12px] mt-2 text-slate-600 dark:text-slate-300 break-all">{odlStartMessage}</p>

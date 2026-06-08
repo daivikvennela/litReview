@@ -17,6 +17,12 @@ import MarkdownContent, { type CitationArticleRef } from '@/components/MarkdownC
 import AuthorsDropdown from '@/components/AuthorsDropdown'
 import { pickReviewText, pickReviewTextMediumTask2 } from '@/lib/reviewPick'
 import { extractIntroductionSectionFromTei, extractRelatedWorkSectionFromTei } from '@/lib/teiRelatedWork'
+import {
+  extractedPreviewText,
+  formatParsePayload,
+  hasExtractedContent,
+  parserEngineLabel,
+} from '@/lib/parseOutputDisplay'
 
 type Task2Depth = 'one_line' | 'five_line' | 'detailed'
 
@@ -75,7 +81,7 @@ function LlmTaskCard({
   task2Depth,
   onTask2DepthChange,
   citationArticle,
-  hasTeiXml,
+  hasParseContent,
 }: {
   title: string
   subtitle: string
@@ -90,7 +96,7 @@ function LlmTaskCard({
   task2Depth?: Task2Depth
   onTask2DepthChange?: (d: Task2Depth) => void
   citationArticle: CitationArticleRef
-  hasTeiXml: boolean
+  hasParseContent: boolean
 }) {
   const text = (streamingText || picked?.text || '').trim()
   const showBody = text.length > 0
@@ -146,8 +152,12 @@ function LlmTaskCard({
           <button
             type="button"
             onClick={onGenerate}
-            disabled={generating || !hasTeiXml}
-            title={!hasTeiXml ? 'Parse the PDF first so TEI is available for the same prompts as the drawer.' : undefined}
+            disabled={generating || !hasParseContent}
+            title={
+              !hasParseContent
+                ? 'Parse the PDF first so extracted content is available for the same prompts as the drawer.'
+                : undefined
+            }
             className="inline-flex items-center gap-1.5 text-[11px] text-blue-600 dark:text-blue-400 hover:text-blue-700 disabled:opacity-50 px-2.5 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40"
           >
             {generating ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
@@ -156,10 +166,10 @@ function LlmTaskCard({
         </div>
       </div>
       <div className="px-4 py-3 text-[13px] min-h-[3rem]">
-        {!hasTeiXml && (
+        {!hasParseContent && (
           <p className="text-amber-700 dark:text-amber-400 text-[12px] mb-2">
-            Upload and parse this PDF on the Upload page so GROBID TEI is available — reviews use the same XML-backed
-            prompts as the library drawer.
+            Upload and parse this PDF on the Upload page first — LLM tasks need extracted parser output (GROBID TEI,
+            OpenDataLoader text, or other parser formats).
           </p>
         )}
         {showBody ? (
@@ -190,7 +200,7 @@ export default function ArticlePage() {
   const [article, setArticle] = useState<ArticleWithReviews | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [xmlOpen, setXmlOpen] = useState(false)
+  const [rawOpen, setRawOpen] = useState(false)
 
   const [models, setModels] = useState<Array<{ id: string }>>([])
   const [defaultModels, setDefaultModels] = useState({
@@ -358,6 +368,19 @@ export default function ArticlePage() {
 
   const xml = article.xml ?? null
   const hasXml = xml != null && typeof xml === 'string' && xml.trim() !== ''
+  const hasParseContent = hasExtractedContent(article)
+  const parserLabel = parserEngineLabel(article.parser_engine ?? article.parse_output?.parser_engine)
+  const parsePreview = extractedPreviewText(article)
+  const rawPayload = hasXml
+    ? xml!
+    : formatParsePayload(article.parse_output?.payload_json) ||
+      article.parse_output?.normalized_text?.trim() ||
+      ''
+  const rawLabel = hasXml
+    ? 'Extracted TEI XML (GROBID)'
+    : article.parse_output
+      ? `Extracted parse output (${parserLabel})`
+      : 'Extracted parse output'
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-8 pb-16">
@@ -386,9 +409,16 @@ export default function ArticlePage() {
           {article.venue_name && <span className="text-slate-600 dark:text-slate-300">{article.venue_name}</span>}
           {article.pdf_path && <span className="font-mono text-[11px] opacity-90">{article.pdf_path}</span>}
         </div>
-        {article.parsed_at && (
-          <p className="text-[11px] text-slate-400">Parsed {new Date(article.parsed_at).toLocaleString()}</p>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {article.parsed_at && (
+            <p className="text-[11px] text-slate-400">Parsed {new Date(article.parsed_at).toLocaleString()}</p>
+          )}
+          {(article.parser_engine || article.parse_output?.parser_engine) && (
+            <span className="text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded-md bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300">
+              {parserLabel}
+            </span>
+          )}
+        </div>
       </header>
 
       {/* Article preview — above TEI */}
@@ -399,10 +429,10 @@ export default function ArticlePage() {
             <h2 className="text-lg font-semibold tracking-tight">Article preview</h2>
           </div>
           <p className="text-[12px] text-slate-500 dark:text-slate-400 -mt-2">
-            <strong className="text-slate-600 dark:text-slate-300">Extracted preview</strong> comes from GROBID TEI
-            (deterministic). <strong className="text-slate-600 dark:text-slate-300">LLM blocks</strong> use the same
-            backend tasks and prompts as the library drawer (<code className="text-[11px]">POST /api/reviews/:id</code>
-            ). Generate or regenerate inline below.
+            <strong className="text-slate-600 dark:text-slate-300">Extracted preview</strong> comes from your parser
+            (GROBID TEI or OpenDataLoader / OCR text). <strong className="text-slate-600 dark:text-slate-300">LLM blocks</strong>{' '}
+            use the same backend tasks and prompts as the library drawer (
+            <code className="text-[11px]">POST /api/reviews/:id</code>). Generate or regenerate inline below.
           </p>
 
           <div className="space-y-3">
@@ -415,9 +445,26 @@ export default function ArticlePage() {
                   {article.abstract}
                 </p>
               ) : (
-                <p className="text-slate-400 italic text-[13px]">No abstract extracted from TEI.</p>
+                <p className="text-slate-400 italic text-[13px]">
+                  No abstract detected in parsed content
+                  {hasParseContent ? ' (common for forms and non-paper PDFs).' : '.'}
+                </p>
               )}
             </div>
+
+            {parsePreview && !hasXml && (
+              <div className="rounded-xl border border-violet-200/80 dark:border-violet-800/80 bg-violet-50/40 dark:bg-violet-950/30 px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-700 dark:text-violet-400 mb-2">
+                  Extracted text ({parserLabel})
+                </p>
+                <pre className="text-[12px] text-slate-800 dark:text-slate-100 leading-relaxed whitespace-pre-wrap font-sans max-h-80 overflow-auto">
+                  {parsePreview}
+                </pre>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-2">
+                  Preview from parser output. Expand the raw parse section below for the full payload.
+                </p>
+              </div>
+            )}
 
             {teiIntro && (
               <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 px-4 py-3">
@@ -495,7 +542,7 @@ export default function ArticlePage() {
                   modelValue={selectedModel[1] ?? defaultModels.task1}
                   onModelChange={(v) => setSelectedModel((s) => ({ ...s, 1: v }))}
                   citationArticle={citationArticle}
-                  hasTeiXml={hasXml}
+                  hasParseContent={hasParseContent}
                 />
                 <LlmTaskCard
                   taskNum={2}
@@ -511,7 +558,7 @@ export default function ArticlePage() {
                   task2Depth={task2Depth}
                   onTask2DepthChange={setTask2Depth}
                   citationArticle={citationArticle}
-                  hasTeiXml={hasXml}
+                  hasParseContent={hasParseContent}
                 />
                 <LlmTaskCard
                   taskNum={3}
@@ -525,7 +572,7 @@ export default function ArticlePage() {
                   modelValue={selectedModel[3] ?? defaultModels.task3}
                   onModelChange={(v) => setSelectedModel((s) => ({ ...s, 3: v }))}
                   citationArticle={citationArticle}
-                  hasTeiXml={hasXml}
+                  hasParseContent={hasParseContent}
                 />
               </div>
             </div>
@@ -552,22 +599,24 @@ export default function ArticlePage() {
       <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden bg-slate-100/50 dark:bg-slate-900/50">
         <button
           type="button"
-          onClick={() => setXmlOpen((o) => !o)}
+          onClick={() => setRawOpen((o) => !o)}
           className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left text-[13px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100/80 dark:hover:bg-slate-800/60"
         >
           <span className="flex items-center gap-2">
-            {xmlOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            Extracted TEI XML (GROBID)
+            {rawOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            {rawLabel}
           </span>
-          {!hasXml && <span className="text-[11px] font-normal text-slate-400">None</span>}
+          {!hasParseContent && <span className="text-[11px] font-normal text-slate-400">None</span>}
         </button>
-        {xmlOpen && hasXml && (
+        {rawOpen && hasParseContent && (
           <pre className="text-xs font-mono bg-slate-900 text-slate-100 p-4 overflow-auto max-h-[70vh] whitespace-pre-wrap break-words border-t border-slate-700">
-            {xml}
+            {rawPayload}
           </pre>
         )}
-        {xmlOpen && !hasXml && (
-          <p className="px-4 pb-4 text-sm text-slate-500 dark:text-slate-400">No extracted XML. Parse the PDF from Upload.</p>
+        {rawOpen && !hasParseContent && (
+          <p className="px-4 pb-4 text-sm text-slate-500 dark:text-slate-400">
+            No extracted content yet. Parse the PDF from Upload.
+          </p>
         )}
       </div>
     </div>

@@ -42,12 +42,19 @@ router.get("/", (_req: Request, res: Response) => {
   res.json(settings);
 });
 
+/** GET masks the key as `slice(0,4) + "****"`; never persist that masked echo back. */
+function isMaskedApiKey(value: string): boolean {
+  return value.trim().endsWith("****");
+}
+
 router.put("/", (req: Request, res: Response) => {
   const body = req.body as Record<string, string>;
   for (const key of SETTING_KEYS) {
-    if (body[key] !== undefined) {
-      setSetting(key, String(body[key]));
-    }
+    if (body[key] === undefined) continue;
+    const value = String(body[key]);
+    // Don't let the masked key from GET /settings overwrite the real stored key.
+    if (key === "openrouter_api_key" && isMaskedApiKey(value)) continue;
+    setSetting(key, value);
   }
   res.json({ ok: true });
 });

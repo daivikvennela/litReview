@@ -4,6 +4,7 @@ import { createOpenRouter } from "../lib/openrouter.js";
 import { getSetting } from "../db.js";
 import { PAPER_REVIEW_SYSTEM, TASK2_DEPTH_INSTRUCTIONS } from "../lib/prompts.js";
 import { DEFAULT_MODEL_ID } from "../lib/modelDefaults.js";
+import { buildChatModelRequest } from "../lib/chatModelGuard.js";
 
 const TASK_LABELS: Record<number, string> = {
   1: "Extract metadata and links (Option 1)",
@@ -63,7 +64,10 @@ router.post("/:articleId", async (req: Request, res: Response) => {
   }
 
   const modelKey = `default_model_task${taskNum}` as const;
-  const model = modelParam || getSetting(modelKey) || getSetting("default_model") || DEFAULT_MODEL_ID;
+  const requestedModel =
+    modelParam || getSetting(modelKey) || getSetting("default_model") || DEFAULT_MODEL_ID;
+  const chatModel = buildChatModelRequest(requestedModel);
+  const model = chatModel.model;
 
   const depthKey = taskNum === 2 ? reviewDepth || "detailed" : "";
   const effectiveDepth = taskNum === 2 ? depthKey : "";
@@ -108,7 +112,9 @@ router.post("/:articleId", async (req: Request, res: Response) => {
           { role: "user", content: userMsg },
         ],
         stream: true,
-      },
+        ...(chatModel.plugins ? { plugins: chatModel.plugins } : {}),
+        ...(chatModel.models ? { models: chatModel.models } : {}),
+      } as never,
     });
 
     for await (const chunk of stream) {

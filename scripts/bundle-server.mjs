@@ -25,7 +25,8 @@ await esbuild.build({
   sourcemap: true,
   logLevel: "info",
   packages: "bundle",
-  external: ["better-sqlite3"],
+  // Keep native + Java-backed packages external so __dirname resolves inside node_modules.
+  external: ["better-sqlite3", "@opendataloader/pdf"],
   banner: importMetaBanner,
   define: {
     "import.meta.url": "__import_meta_url",

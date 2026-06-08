@@ -13,6 +13,11 @@ import {
 import { validateCiteTargets } from "../lib/chatCiteGuard.js";
 import { relatedWorkPassesRigor } from "../lib/relatedWorkQualityGate.js";
 import { DEFAULT_MODEL_ID } from "../lib/modelDefaults.js";
+import {
+  buildChatModelRequest,
+  isSafetyClassifierOutput,
+  safetyClassifierUserMessage,
+} from "../lib/chatModelGuard.js";
 
 const router = Router();
 
@@ -48,7 +53,8 @@ router.post("/", async (req: Request, res: Response) => {
     return;
   }
 
-  const selectedModel = model || getSetting("default_model") || DEFAULT_MODEL_ID;
+  const requestedModel = model || getSetting("default_model") || DEFAULT_MODEL_ID;
+  const chatModel = buildChatModelRequest(requestedModel);
 
   const contentParts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
   if (files && Array.isArray(files) && files.length > 0) {
@@ -111,15 +117,20 @@ router.post("/", async (req: Request, res: Response) => {
     const openrouter = createOpenRouter(apiKey);
     const stream = await openrouter.chat.send({
       chatGenerationParams: {
-        model: selectedModel,
+        model: chatModel.model,
         messages: messages as unknown as never[],
         stream: true,
-      },
+        ...(chatModel.plugins ? { plugins: chatModel.plugins } : {}),
+        ...(chatModel.models ? { models: chatModel.models } : {}),
+      } as never,
     });
 
     let fullText = "";
+    let routedModel = chatModel.model;
     for await (const chunk of stream) {
       if (clientAborted) break;
+      const chunkModel = (chunk as { model?: string }).model;
+      if (chunkModel) routedModel = chunkModel;
       const delta = chunk.choices?.[0]?.delta;
       const content = typeof delta?.content === "string" ? delta.content : "";
       // Never stream delta.reasoning — it is model chain-of-thought, not user-facing output.
@@ -140,6 +151,17 @@ router.post("/", async (req: Request, res: Response) => {
         `data: ${JSON.stringify({
           error:
             "Model returned no text (empty stream). Try another model in Settings, or wait if free models are rate-limited.",
+        })}\n\n`,
+      );
+      res.write("data: [DONE]\n\n");
+      res.end();
+      return;
+    }
+
+    if (isSafetyClassifierOutput(fullText)) {
+      res.write(
+        `data: ${JSON.stringify({
+          error: safetyClassifierUserMessage(routedModel),
         })}\n\n`,
       );
       res.write("data: [DONE]\n\n");

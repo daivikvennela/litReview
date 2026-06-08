@@ -1,4 +1,4 @@
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { mkdtemp, readFile, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
@@ -6,6 +6,21 @@ import { convert } from "@opendataloader/pdf";
 import { resolveFromApp } from "../appPaths.js";
 import type { OpenDataLoaderParseOptions, ParsedArticleFields, ParsedOutput } from "./types.js";
 import { extractFieldsFromVlmMarkdown, markdownToPlainText } from "./vlmShared.js";
+
+const ODL_JAR_REL = path.join("node_modules", "@opendataloader", "pdf", "lib", "opendataloader-pdf-cli.jar");
+
+export function openDataLoaderJarPath(): string {
+  return resolveFromApp(ODL_JAR_REL);
+}
+
+function assertOpenDataLoaderJar(): void {
+  const jarPath = openDataLoaderJarPath();
+  if (!existsSync(jarPath)) {
+    throw new Error(
+      `OpenDataLoader JAR missing at ${jarPath}. Reinstall the app or run: npm install in app/.`,
+    );
+  }
+}
 
 function odlPackageVersion(): string {
   try {
@@ -187,6 +202,7 @@ export async function parseWithOpenDataLoader(
   const mdPath = path.join(workDir, `${base}.md`);
 
   try {
+    assertOpenDataLoaderJar();
     await writeFile(pdfPath, pdfBuffer);
 
     const hybridOn = opts.hybrid === "docling-fast" || opts.hybrid === "hancom-ai";
