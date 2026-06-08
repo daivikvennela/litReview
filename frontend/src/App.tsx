@@ -2,7 +2,6 @@ import { BrowserRouter, NavLink, Route, Routes, useLocation } from 'react-router
 import {
   BookOpen,
   Database,
-  FileText,
   KeyRound,
   LayoutDashboard,
   MessageSquare,
@@ -42,9 +41,11 @@ function Sidebar() {
 
       <div className="mb-8 px-3 relative">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center shadow-glow">
-            <FileText className="w-4 h-4 text-white" />
-          </div>
+          <img
+            src={`${import.meta.env.BASE_URL}icon.png`}
+            alt="Lit Review Agent"
+            className="w-9 h-9 rounded-xl shadow-glow ring-1 ring-white/10"
+          />
           <div>
             <span className="font-bold text-[13px] tracking-tight text-white block leading-tight">
               Lit Review

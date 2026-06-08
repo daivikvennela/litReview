@@ -89,6 +89,9 @@ if [[ "${SET_GROBID:-}" =~ ^[Yy]$ ]]; then
   fi
 fi
 
+echo "-> Generating app icon..."
+node scripts/generate-icon.mjs
+
 echo "-> Building frontend into app/public..."
 npm run build
 

@@ -12,6 +12,7 @@
   },
   "scripts": {
     "dev:setup": "npm --prefix app rebuild better-sqlite3",
+    "predev": "node scripts/generate-icon.mjs",
     "dev": "concurrently \"npm run dev:app\" \"npm run dev:frontend\"",
     "dev:app": "cd app && npx tsx server.ts",
     "dev:frontend": "cd frontend && npm run dev",
