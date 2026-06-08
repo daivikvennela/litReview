@@ -119,7 +119,15 @@ Set these secrets in GitHub Actions (or locally) for signed installers:
 | `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | Notarization |
 | `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD` | Windows Authenticode |
 
-Without signing, users may need **right-click → Open** (macOS) or **More info → Run anyway** (Windows SmartScreen).
+Without signing, macOS users often see **“Lit Review Agent is damaged and can’t be opened”** — the app is fine; Gatekeeper quarantined the download. Fixes:
+
+1. Right-click the app → **Open** → **Open**
+2. Terminal: `xattr -cr "/Applications/Lit Review Agent.app"`
+3. **System Settings → Privacy & Security → Open Anyway**
+
+Windows users: SmartScreen → **More info → Run anyway**.
+
+Production releases should use the signing secrets below so users do not need these steps.
 
 ## CI releases
 

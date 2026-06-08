@@ -35,7 +35,24 @@ Repo: [preethamam/Papers-Articles-Literature-Review-Agent](https://github.com/pr
 1. If prompted about **Java**, install [Adoptium JDK 11+](https://adoptium.net/) for the default PDF parser (OpenDataLoader), then **restart the app**. Or continue without Java and use GROBID.
 2. Open **Settings** and set your **OpenRouter API key** (or edit the `.env` file in the app data folder—see [PACKAGING.md](PACKAGING.md)).
 
-**Unsigned builds:** macOS → right-click the app → **Open**. Windows → SmartScreen → **More info** → **Run anyway**.
+### macOS: “damaged and can’t be opened”
+
+The app is **not** corrupted. GitHub downloads are **unsigned**, so macOS Gatekeeper blocks them and sometimes shows **damaged** instead of **unidentified developer**.
+
+**Fix (pick one):**
+
+1. **Right-click** **Lit Review Agent** in Applications → **Open** → confirm **Open** (not double-click).
+2. If that still fails, run in **Terminal** (clears the download quarantine flag):
+
+```bash
+xattr -cr "/Applications/Lit Review Agent.app"
+```
+
+Then open the app normally from Applications.
+
+3. Or: **System Settings → Privacy & Security** → scroll down → **Open Anyway** (after a blocked launch attempt).
+
+**Windows unsigned builds:** SmartScreen → **More info** → **Run anyway**.
 
 To build installers yourself, see [PACKAGING.md](PACKAGING.md).
 
