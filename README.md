@@ -45,14 +45,23 @@ Releases are **unsigned** (Apple charges **$99/year** for signing). The app is *
 xattr -cr "/Applications/Lit Review Agent.app"
 ```
 
-Then open **Lit Review Agent** from Applications as usual.
+If `xattr` prints **Operation not permitted** (common on recent macOS), copy the app without quarantine instead:
+
+```bash
+mkdir -p "$HOME/Applications"
+ditto --noextattr --noqtn "/Applications/Lit Review Agent.app" "$HOME/Applications/Lit Review Agent.app"
+open "$HOME/Applications/Lit Review Agent.app"
+```
+
+Then open **Lit Review Agent** from Applications (or `~/Applications` if you used `ditto`).
 
 **Other options:**
 
 1. **Right-click** the app in Applications → **Open** → **Open** (don’t double-click the first time).
 2. **System Settings → Privacy & Security → Open Anyway** (appears after one blocked launch).
+3. In the desktop app: **Settings → Quit application** (fully exits; the red window button only hides the window on macOS).
 
-You only need to run `xattr` again if you **re-download** a new version from GitHub.
+You only need to run `xattr` / `ditto` again if you **re-download** a new version from GitHub.
 
 **Windows unsigned builds:** SmartScreen → **More info** → **Run anyway**.
 

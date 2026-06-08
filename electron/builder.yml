@@ -36,7 +36,8 @@ mac:
   category: public.app-category.productivity
   target:
     - dmg
-  # Local/unsigned default. CI release uses electron/builder.signing-mac.yml overlay.
+  # Explicitly skip code signing for unsigned CI builds.
+  identity: "-"
   hardenedRuntime: false
   gatekeeperAssess: false
   notarize: false

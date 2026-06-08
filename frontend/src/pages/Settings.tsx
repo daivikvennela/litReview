@@ -1,5 +1,16 @@
 import { useState, useEffect } from 'react'
-import { Settings as SettingsIcon, Key, Server, Cpu, Play, FileSearch, Layers, BarChart3, Wrench } from 'lucide-react'
+import {
+  Settings as SettingsIcon,
+  Key,
+  Server,
+  Cpu,
+  Play,
+  FileSearch,
+  Layers,
+  BarChart3,
+  Wrench,
+  Power,
+} from 'lucide-react'
 import {
   getSettings,
   updateSettings,
@@ -18,6 +29,7 @@ import type { Settings, ParserEngine } from '@/lib/api'
 import ModelBenchmarks from '@/components/ModelBenchmarks'
 import SystemCheck from '@/components/SystemCheck'
 import { DEFAULT_MODEL_ID, CATALOG_MODEL_IDS } from '@/lib/modelCatalog'
+import { isElectronApp, quitElectronApp } from '@/lib/electronBridge'
 
 const PARSER_ENGINE_OPTIONS: Array<{ value: ParserEngine; label: string }> = [
   { value: 'opendataloader', label: 'OpenDataLoader (default, #1 in benchmarks)' },
@@ -51,8 +63,14 @@ export default function Settings() {
   const [odlStartMessage, setOdlStartMessage] = useState<string | null>(null)
   const [odlJarOk, setOdlJarOk] = useState<boolean | null>(null)
   const [odlRepairing, setOdlRepairing] = useState(false)
+  const [desktopApp, setDesktopApp] = useState(false)
+  const [quitting, setQuitting] = useState(false)
   const [dotsAlive, setDotsAlive] = useState<boolean | null>(null)
   const [chandraAlive, setChandraAlive] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    setDesktopApp(isElectronApp())
+  }, [])
 
   useEffect(() => {
     getSettings().then((s) => {
@@ -167,6 +185,11 @@ export default function Settings() {
     updateSettings(payload)
       .then(() => setSaving(false))
       .catch(() => setSaving(false))
+  }
+
+  const handleQuitApp = () => {
+    setQuitting(true)
+    void quitElectronApp().finally(() => setQuitting(false))
   }
 
   const refreshOdlStatus = () =>
@@ -737,13 +760,37 @@ export default function Settings() {
           </div>
         </div>
 
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="px-5 py-2.5 bg-blue-600 text-white text-[13px] font-medium rounded-xl hover:bg-blue-700 disabled:opacity-50"
-        >
-          {saving ? 'Saving…' : 'Save settings'}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="px-5 py-2.5 bg-blue-600 text-white text-[13px] font-medium rounded-xl hover:bg-blue-700 disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Save settings'}
+          </button>
+        </div>
+
+        {desktopApp && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-card border border-slate-100 dark:border-slate-800">
+            <h2 className="flex items-center gap-2 text-[15px] font-semibold text-slate-800 dark:text-slate-100 mb-2">
+              <Power className="w-4 h-4" /> Quit application
+            </h2>
+            <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">
+              On macOS, the red window button only hides this window — the app can keep running in the Dock.
+              Use this button to fully quit Lit Review Agent and stop the background server.
+            </p>
+            <button
+              type="button"
+              onClick={handleQuitApp}
+              disabled={quitting}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-medium border border-red-200 dark:border-red-900/60 text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-950/60 disabled:opacity-60"
+            >
+              <Power className="w-4 h-4" />
+              {quitting ? 'Quitting…' : 'Quit Lit Review Agent'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

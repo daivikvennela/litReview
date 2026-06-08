@@ -365,6 +365,20 @@ function stopServer(): void {
   serverProc = null;
 }
 
+/** Fully exit the desktop app (stops API child, closes windows). */
+function quitApplication(): void {
+  closeSplash();
+  stopServer();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.removeAllListeners("close");
+    mainWindow.destroy();
+  }
+  mainWindow = null;
+  app.quit();
+  // Fallback if a child process or event handler blocks a clean quit.
+  setTimeout(() => app.exit(0), 1500);
+}
+
 async function createWindow(port: number): Promise<void> {
   const preloadPath = path.join(__dirname, "preload.cjs");
 
@@ -394,6 +408,10 @@ async function createWindow(port: number): Promise<void> {
 
 function registerIpc(): void {
   ipcMain.handle("app:getVersion", () => app.getVersion());
+  ipcMain.handle("app:isElectron", () => true);
+  ipcMain.handle("app:quit", () => {
+    quitApplication();
+  });
   ipcMain.handle("shell:openExternal", (_e, url: string) => {
     return shell.openExternal(url);
   });
